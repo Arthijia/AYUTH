@@ -19,8 +19,19 @@
                 <div class="header-controls">
                     <select id="languageSelect" class="control-select" aria-label="Select Language">
                         <option value="en">English</option>
-                        <option value="hi">हिन्दी</option>
-                        <option value="kn">ಕನ್ನಡ</option>
+                        <option value="zh">中文 (Chinese)</option>
+                        <option value="fr">Français (French)</option>
+                        <option value="de">Deutsch (German)</option>
+                        <option value="ja">日本語 (Japanese)</option>
+                        <option value="hi">हिन्दी (Hindi)</option>
+                        <option value="kn">ಕನ್ನಡ (Kannada)</option>
+                        <option value="ta">தமிழ் (Tamil)</option>
+                        <option value="te">తెలుగు (Telugu)</option>
+                        <option value="ml">മലയാളം (Malayalam)</option>
+                        <option value="mr">मराठी (Marathi)</option>
+                        <option value="bn">বাংলা (Bengali)</option>
+                        <option value="gu">ગુજરાતી (Gujarati)</option>
+                        <option value="sa">संस्कृतम् (Sanskrit)</option>
                     </select>
                     <button id="settingsBtn" class="btn-icon" title="Settings" aria-label="Settings">⚙️</button>
                     <button id="infoBtn" class="btn-icon" title="About" aria-label="About">ℹ️</button>
@@ -36,20 +47,6 @@
                     <button class="modal-close" onclick="closeSettings()">×</button>
                 </div>
                 <div class="modal-body">
-                    <div class="settings-section">
-                        <h3 data-i18n="jurisdictionLabel">Jurisdiction</h3>
-                        <div class="radio-group">
-                            <label>
-                                <input type="radio" name="jurisdiction" value="india" checked>
-                                <span data-i18n="jurisdictionIndia">India Only</span>
-                            </label>
-                            <label>
-                                <input type="radio" name="jurisdiction" value="international">
-                                <span data-i18n="jurisdictionIntl">International Regimes (WIPO, CBD)</span>
-                            </label>
-                        </div>
-                    </div>
-
                     <div class="settings-section">
                         <h3 data-i18n="apiKeyLabel">API Configuration</h3>
                         <p data-i18n="apiHelpText" class="help-text">Enter your Gemini API key to enable Live AI mode. Leave empty to use Offline mode.</p>
@@ -155,9 +152,6 @@
                     <div class="chat-container">
                         <div class="chat-header">
                             <h2 id="chatTitle" data-i18n="chatTitle">IP & Regulatory Guidance Chat</h2>
-                            <div class="scope-indicator">
-                                <span id="jurisdictionIndicator" class="badge badge-india">India Only</span>
-                            </div>
                         </div>
 
                         <div id="chatMessages" class="chat-messages">
@@ -175,7 +169,7 @@
                 </div>
 
                 <!-- Invention Classifier Tab -->
-                <div id="classifierTab" class="tab-content hidden">
+                <div id="classifierTab" class="tab-content">
                     <div class="classifier-container">
                         <h2 id="classifierTitle" data-i18n="classifierTitle">Invention Profile Builder</h2>
                         <p id="classifierDescription" data-i18n="classifierDescription">Answer these 5 questions to build your invention profile. This helps AYUTH provide better guidance tailored to your innovation.</p>
@@ -203,7 +197,12 @@
                                     <option value="no">No</option>
                                     <option value="yes_limited">Yes, in limited circles (confidential discussions)</option>
                                     <option value="yes_public">Yes, publicly (papers, presentations, social media)</option>
+                                    <option value="other">Other (specify / describe your own)</option>
                                 </select>
+                                <div id="q4OtherContainer" class="form-group hidden" style="margin-top: var(--spacing-sm);">
+                                    <label for="q4Other" id="q4OtherLabel" data-i18n="q4OtherLabel">Please describe the disclosure circumstance:</label>
+                                    <textarea id="q4Other" class="input-text" rows="2" placeholder="e.g., Disclosed under NDA at an academic exhibition..."></textarea>
+                                </div>
                             </div>
 
                             <div class="form-group">
@@ -214,7 +213,12 @@
                                     <option value="biological_nontraditional">Yes, biological resources but not traditional knowledge</option>
                                     <option value="traditional_knowledge">Yes, traditional knowledge (e.g., Vedic, Siddha, Unani practices)</option>
                                     <option value="both">Yes, both biological resources and traditional knowledge</option>
+                                    <option value="other">Other (specify / describe your own)</option>
                                 </select>
+                                <div id="q5OtherContainer" class="form-group hidden" style="margin-top: var(--spacing-sm);">
+                                    <label for="q5Other" id="q5OtherLabel" data-i18n="q5OtherLabel">Please describe your biological resource or traditional knowledge:</label>
+                                    <textarea id="q5Other" class="input-text" rows="2" placeholder="e.g., Rare local Himalayan botanical formulation passed down through traditional lineage..."></textarea>
+                                </div>
                             </div>
 
                             <div class="form-actions">
@@ -231,7 +235,7 @@
                 </div>
 
                 <!-- Invention Locker Tab -->
-                <div id="lockerTab" class="tab-content hidden">
+                <div id="lockerTab" class="tab-content">
                     <div class="locker-container">
                         <h2 id="lockerTitle" data-i18n="lockerTitle">Invention Locker</h2>
                         <p id="lockerDescription" data-i18n="lockerDescription">Create a timestamped proof-of-conception record by hashing your invention description. This is stored locally in your browser — never uploaded anywhere.</p>
@@ -275,7 +279,7 @@
                 </div>
 
                 <!-- Knowledge Base Tab -->
-                <div id="kbTab" class="tab-content hidden">
+                <div id="kbTab" class="tab-content">
                     <div class="kb-container">
                         <h2 id="kbTitle" data-i18n="kbTitle">Offline Knowledge Base</h2>
                         <p id="kbDescription" data-i18n="kbDescription">Curated Q&A on common IP and regulatory questions for Ayurvedic inventions.</p>

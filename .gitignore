@@ -5,6 +5,9 @@
 .env
 .env.local
 .env.*.local
+backend/.env
+chroma_data/
+backend/chroma_data/
 *.key
 *.pem
 api-keys.txt

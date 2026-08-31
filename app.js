@@ -5,9 +5,10 @@
 
 // Global State
 let appState = {
-  jurisdiction: localStorage.getItem("ayuthJurisdiction") || "india",
-  apiKey: localStorage.getItem("ayuthApiKey") || null, // Persist API key
+  jurisdiction: "all",
+  apiKey: localStorage.getItem("ayuthApiKey") || null, // Session / local storage
   apiModel: localStorage.getItem("ayuthModel") || "gemini-1.5-pro",
+  language: typeof getLanguage === "function" ? getLanguage() : (localStorage.getItem("ayuthLanguage") || "en"),
   inventionProfile: JSON.parse(localStorage.getItem("ayuthProfile")) || null,
   conversationHistory: JSON.parse(localStorage.getItem("ayuthChat")) || [],
   isLoading: false,
@@ -19,12 +20,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initializeApp() {
-  // Load saved settings
-  const jurisdiction = localStorage.getItem("ayuthJurisdiction") || "india";
-  document.querySelector(
-    `input[name="jurisdiction"][value="${jurisdiction}"]`
-  ).checked = true;
-  updateJurisdictionIndicator();
+  // Clear any legacy jurisdiction setting
+  localStorage.removeItem("ayuthJurisdiction");
+  appState.jurisdiction = "all";
+
+  // Remove any legacy jurisdiction indicator elements from DOM
+  document.querySelectorAll(".scope-indicator, #jurisdictionIndicator, .badge-india, .badge-intl").forEach(el => el.remove());
 
   // Set up event listeners
   setupEventListeners();
@@ -52,15 +53,6 @@ function initializeApp() {
 }
 
 function setupEventListeners() {
-  // Jurisdiction toggle
-  document.querySelectorAll('input[name="jurisdiction"]').forEach((radio) => {
-    radio.addEventListener("change", (e) => {
-      appState.jurisdiction = e.target.value;
-      localStorage.setItem("ayuthJurisdiction", e.target.value);
-      updateJurisdictionIndicator();
-    });
-  });
-
   // API Key input - use "input" for real-time, and "change" for when it loses focus
   const apiKeyInput = document.getElementById("apiKeyInput");
   if (apiKeyInput) {
@@ -93,6 +85,36 @@ function setupEventListeners() {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
+      }
+    });
+  }
+
+  // Q4 Other toggle listener
+  const q4Select = document.getElementById("q4");
+  const q4OtherContainer = document.getElementById("q4OtherContainer");
+  if (q4Select && q4OtherContainer) {
+    q4Select.addEventListener("change", (e) => {
+      if (e.target.value === "other") {
+        q4OtherContainer.classList.remove("hidden");
+        const q4Other = document.getElementById("q4Other");
+        if (q4Other) q4Other.focus();
+      } else {
+        q4OtherContainer.classList.add("hidden");
+      }
+    });
+  }
+
+  // Q5 Other toggle listener
+  const q5Select = document.getElementById("q5");
+  const q5OtherContainer = document.getElementById("q5OtherContainer");
+  if (q5Select && q5OtherContainer) {
+    q5Select.addEventListener("change", (e) => {
+      if (e.target.value === "other") {
+        q5OtherContainer.classList.remove("hidden");
+        const q5Other = document.getElementById("q5Other");
+        if (q5Other) q5Other.focus();
+      } else {
+        q5OtherContainer.classList.add("hidden");
       }
     });
   }
@@ -172,16 +194,7 @@ function clearSession() {
   }
 }
 
-function updateJurisdictionIndicator() {
-  const indicator = document.getElementById("jurisdictionIndicator");
-  if (appState.jurisdiction === "india") {
-    indicator.textContent = t("jurisdictionIndia");
-    indicator.className = "badge badge-india";
-  } else {
-    indicator.textContent = t("jurisdictionIntl");
-    indicator.className = "badge badge-intl";
-  }
-}
+
 
 // ============================================
 // Tab Navigation
@@ -191,6 +204,7 @@ function switchTab(tabName) {
   // Hide all tabs
   document.querySelectorAll(".tab-content").forEach((tab) => {
     tab.classList.remove("active");
+    tab.classList.remove("hidden");
   });
 
   // Remove active class from nav buttons
@@ -201,6 +215,7 @@ function switchTab(tabName) {
   // Show selected tab
   const tab = document.getElementById(tabName + "Tab");
   if (tab) {
+    tab.classList.remove("hidden");
     tab.classList.add("active");
   }
 
@@ -258,22 +273,27 @@ function addMessageToChat(content, role = "user") {
 function parseMessageForAlerts(content) {
   let html = escapeHtml(content);
 
+  // Don't flag greeting introductions
+  if (content.includes("AYUTH") && (content.includes("How can I help") || content.includes("सहायक") || content.includes("ಸಹಾಯಕ") || content.includes("உதவியாளர்") || content.includes("సహాయకుడు") || content.includes("സഹായി") || content.includes("सहाय्यक") || content.includes("সহায়ক") || content.includes("મદદનીશ") || content.includes("सहायकः"))) {
+    return html;
+  }
+
   // Check for risk keywords and inject alerts
   const alerts = [
     {
-      pattern: /TKDL|traditional knowledge|overlaps?/gi,
+      pattern: /TKDL|traditional knowledge|overlaps?|अतिव्याप्ति|ಅತಿರೇಕ|மேலெழுதல்|అతివ్యాప్తి|ഓവർലാപ്പ്|ओव्हरलॅप|ওভারল্যাপ|ઓવરલેપ/gi,
       type: "tkdl",
       title: t("tkdlAlertTitle"),
       message: t("tkdlAlertMessage"),
     },
     {
-      pattern: /biopiracy|biological resources|benefit-sharing/gi,
+      pattern: /biopiracy|biological resources|benefit-sharing|जैव चोरी|ಜೈವಿಕ ಕಳ್ಳಸಾಗಣೆ|உயிரியல் திருட்டு|బయోపైరసీ|ബയോപൈറസി|જૈવચોરી/gi,
       type: "biopiracy",
       title: t("biopiracyAlertTitle"),
       message: t("biopiracyAlertMessage"),
     },
     {
-      pattern: /novelty|prior art|public disclosure/gi,
+      pattern: /novelty|prior art|public disclosure|नवीनता|ನವೀನತೆ|புதுமை|నవ్యత|പുതുമ/gi,
       type: "novelty",
       title: t("noveltyAlertTitle"),
       message: t("noveltyAlertMessage"),
@@ -328,24 +348,23 @@ async function getAIResponse(userMessage) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    // Check if API key is available for live mode
-    if (appState.apiKey && appState.apiKey.trim().length > 0) {
-      // Live AI mode
-      const response = await callGeminiAPI(userMessage);
-      loadingDiv.remove();
-      addMessageToChat(response, "assistant");
+    // Try RAG Backend API first
+    const response = await callGeminiAPI(userMessage);
+    loadingDiv.remove();
+    addMessageToChat(response, "assistant");
+  } catch (error) {
+    // If live API fails or server unreachable and no explicit fatal error, fallback gracefully
+    console.warn("Backend/Gemini call issue, falling back:", error.message);
+    loadingDiv.remove();
+    if (error.message.includes("Invalid API key")) {
+      addMessageToChat(
+        t("errorMessage") + " (" + error.message + ")",
+        "assistant"
+      );
     } else {
-      // Offline mode - use knowledge base
-      loadingDiv.remove();
       const response = getOfflineResponse(userMessage);
       addMessageToChat(response, "assistant");
     }
-  } catch (error) {
-    loadingDiv.remove();
-    addMessageToChat(
-      t("errorMessage") + " (" + error.message + ")",
-      "assistant"
-    );
   }
 
   appState.isLoading = false;
@@ -385,7 +404,11 @@ function retrieveRelevantKnowledge(userMessage, limit = 3) {
 }
 
 async function callGeminiAPI(userMessage) {
-  const response = await fetch("http://localhost:4000/api/chat", {
+  const apiUrl = window.location.protocol === "file:"
+    ? "http://localhost:8000/api/chat"
+    : "/api/chat";
+
+  const response = await fetch(apiUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -393,6 +416,7 @@ async function callGeminiAPI(userMessage) {
       jurisdiction: appState.jurisdiction,
       inventionProfile: appState.inventionProfile || {},
       apiKey: appState.apiKey,
+      language: appState.language || (typeof getLanguage === "function" ? getLanguage() : "en"),
     }),
   });
 
@@ -401,14 +425,24 @@ async function callGeminiAPI(userMessage) {
     const message = errorData.error || `Backend API error: ${response.status}`;
 
     if (response.status === 401 || message.toLowerCase().includes("api key")) {
-      throw new Error("Invalid API key. Check your Gemini API key in settings.");
+      throw new Error("Invalid API key. Check your Gemini API key in settings or server .env.");
     }
 
     throw new Error(message);
   }
 
   const data = await response.json();
-  return data.answer || "I could not generate a grounded answer.";
+  let answer = data.answer || "I could not generate a grounded answer.";
+
+  // Append citations and sources if present
+  if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+    const citationsList = data.sources
+      .map((s, i) => `• **${s.citation || s.category}**: ${s.question}`)
+      .join("\n");
+    answer += `\n\n---\n**📚 Retrieved Sources & Citations:**\n${citationsList}`;
+  }
+
+  return answer;
 }
 
 function getOfflineResponse(userMessage) {
@@ -436,25 +470,32 @@ function saveInventionProfile() {
   const q3 = document.getElementById("q3").value.trim();
   const q4 = document.getElementById("q4").value;
   const q5 = document.getElementById("q5").value;
+  const q4Other = document.getElementById("q4Other") ? document.getElementById("q4Other").value.trim() : "";
+  const q5Other = document.getElementById("q5Other") ? document.getElementById("q5Other").value.trim() : "";
 
   const missingFields = [];
   if (!q1) missingFields.push(t("q1Field"));
   if (!q2) missingFields.push(t("q2Field"));
   if (!q3) missingFields.push(t("q3Field"));
   if (!q4) missingFields.push(t("q4Field"));
+  if (q4 === "other" && !q4Other) missingFields.push(t("q4OtherField") || "Q4: Custom disclosure description");
   if (!q5) missingFields.push(t("q5Field"));
+  if (q5 === "other" && !q5Other) missingFields.push(t("q5OtherField") || "Q5: Custom biological/TK description");
 
   if (missingFields.length > 0) {
     alert(t("promptAllQuestions") + "\n" + missingFields.map((f) => "• " + f).join("\n"));
     return;
   }
 
+  const finalDisclosure = q4 === "other" ? (q4Other ? `Other: ${q4Other}` : "Other") : q4;
+  const finalBioResources = q5 === "other" ? (q5Other ? `Other: ${q5Other}` : "Other") : q5;
+
   appState.inventionProfile = {
     description: q1,
     problem: q2,
     novelty: q3,
-    disclosure: q4,
-    bioResources: q5,
+    disclosure: finalDisclosure,
+    bioResources: finalBioResources,
     savedAt: new Date().toLocaleString(),
   };
 
@@ -480,8 +521,8 @@ function displayInventionProfileSummary() {
     <p><strong>${t("profileInventionLabel")}</strong> ${escapeHtml(profile.description)}</p>
     <p><strong>${t("profileProblemLabel")}</strong> ${escapeHtml(profile.problem)}</p>
     <p><strong>${t("profileNoveltyLabel")}</strong> ${escapeHtml(profile.novelty)}</p>
-    <p><strong>${t("profileDisclosureLabel")}</strong> ${profile.disclosure}</p>
-    <p><strong>${t("profileBioLabel")}</strong> ${profile.bioResources}</p>
+    <p><strong>${t("profileDisclosureLabel")}</strong> ${escapeHtml(profile.disclosure)}</p>
+    <p><strong>${t("profileBioLabel")}</strong> ${escapeHtml(profile.bioResources)}</p>
     <p><small>${t("profileSavedAtLabel")} ${profile.savedAt}</small></p>
   `;
 
@@ -493,6 +534,10 @@ function clearInventionProfile() {
     appState.inventionProfile = null;
     localStorage.removeItem("ayuthProfile");
     document.getElementById("classifierForm").reset();
+    const q4OtherContainer = document.getElementById("q4OtherContainer");
+    const q5OtherContainer = document.getElementById("q5OtherContainer");
+    if (q4OtherContainer) q4OtherContainer.classList.add("hidden");
+    if (q5OtherContainer) q5OtherContainer.classList.add("hidden");
     document.getElementById("profileSummary").classList.add("hidden");
     updateSessionInfo();
   }

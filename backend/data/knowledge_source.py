@@ -1,0 +1,86 @@
+"""
+Canonical Ayurvedic IP & Traditional Knowledge Corpus for AYUTH RAG
+"""
+
+KNOWLEDGE_BASE = [
+    {
+        "id": "tkdl-overlap",
+        "category": "TKDL & Traditional Knowledge",
+        "question": "What is Section 3(p) under the Indian Patents Act and how does TKDL affect Ayurvedic patent applications?",
+        "answer": "Under Section 3(p) of the Indian Patents Act, 1970, an invention which in effect is traditional knowledge or which is an aggregation or duplication of known properties of traditionally known components is not an invention. The Traditional Knowledge Digital Library (TKDL), established by CSIR and Ministry of AYUSH, documents over 2.5 lakh medicinal formulations across Ayurveda, Unani, and Siddha texts. Patent examiners in India (IPO), EPO, USPTO, and JPO search TKDL during examination. If an applicant claims a known herbal property without significant novel technical modification or synergism, the application is rejected under Section 3(p).",
+        "citation": "Section 3(p), Indian Patents Act, 1970; CSIR-TKDL Access Agreements with EPO/USPTO; IPO Guidelines for Examination of Patent Applications relating to Traditional Knowledge and Biological Material (2012)",
+        "jurisdiction": ["india", "international"],
+    },
+    {
+        "id": "synergistic-admixture-3e",
+        "category": "Patentability & Section 3(e)",
+        "question": "How can an Ayurvedic polyherbal combination overcome Section 3(e) admixture objections?",
+        "answer": "Section 3(e) prohibits patenting of a substance obtained by a mere admixture resulting only in the aggregation of the properties of the components thereof. To overcome 3(e), applicants must submit quantitative comparative experimental data demonstrating non-obvious synergistic enhancement (e.g., fractional inhibitory concentration index, synergistic combination index < 0.8, or statistically significant enhancement in bioavailability or therapeutic index compared to the sum of individual constituents). Mere additive therapeutic effect is insufficient.",
+        "citation": "Section 3(e), Indian Patents Act, 1970; IPO Guidelines for Biological Inventions (Rule 24B/30)",
+        "jurisdiction": ["india", "international"],
+    },
+    {
+        "id": "nba-clearance-section6",
+        "category": "Biological Diversity Compliance",
+        "question": "When is National Biodiversity Authority (NBA) approval mandatory before filing or grant of a patent in India?",
+        "answer": "Under Section 6(1) of the Biological Diversity Act, 2002, any person applying for an intellectual property right in or outside India for any invention based on any research or information on a biological resource obtained from India must obtain prior approval of the National Biodiversity Authority (NBA) using Form III. In Indian patent practice, NBA approval must be submitted before the grant of the patent. Failure to comply can lead to revocation proceedings under Section 64(1)(p) and penal consequences under Section 55.",
+        "citation": "Section 6(1) & Section 55, Biological Diversity Act, 2002; Form III (Rule 18, Biological Diversity Rules, 2004); Section 64(1)(p), Patents Act, 1970",
+        "jurisdiction": ["india"],
+    },
+    {
+        "id": "efficacy-enhancement-3d",
+        "category": "Patentability & Section 3(d)",
+        "question": "What standard of therapeutic efficacy is required under Section 3(d) for improved Ayurvedic extracts or isolated phytoconstituents?",
+        "answer": "Section 3(d) bars patenting of the mere discovery of a new form of a known substance which does not result in the enhancement of the known efficacy of that substance. For botanical derivatives, purified phytoconstituents, or novel dosage forms (e.g., nano-curcumin, phospholipid complexes), applicants must provide comparative pharmacological or in-vivo data proving enhanced therapeutic efficacy over the standard crude extract, not mere physical, pharmacokinetic, or chemical modification.",
+        "citation": "Section 3(d), Indian Patents Act, 1970; Novartis AG v. Union of India (2013) 6 SCC 1",
+        "jurisdiction": ["india"],
+    },
+    {
+        "id": "schedule-t-gmp-licensing",
+        "category": "Regulatory Licensing & AYUSH GMP",
+        "question": "What regulatory licenses and quality standards are required to manufacture and commercialize Ayurvedic proprietary medicines in India?",
+        "answer": "Commercial manufacturing of Ayurvedic drugs requires a manufacturing license issued by the State Licensing Authority (AYUSH) under the Drugs and Cosmetics Act, 1940 and Drugs and Cosmetics Rules, 1945 (Part XVI & XVII). Facilities must strictly comply with Schedule T Good Manufacturing Practices (GMP) covering infrastructure, batch testing, hygiene, and raw material standardization against Ayurvedic Pharmacopoeia of India (API) monographs. Proprietary formulations require proof of safety, stability data, and clinical trial clearance if novel ingredients or non-classical ratios are used.",
+        "citation": "Drugs and Cosmetics Act, 1940 (Sections 33A-33N); Drugs and Cosmetics Rules, 1945 (Schedule T, Part XVI, Rule 151-158); Ayurvedic Pharmacopoeia of India (API)",
+        "jurisdiction": ["india"],
+    },
+    {
+        "id": "biopiracy-risks",
+        "category": "Biopiracy & Prior Art",
+        "question": "What is biopiracy in Ayurvedic IP and how does prior art invalidation occur internationally?",
+        "answer": "Biopiracy refers to the unauthorized appropriation and patenting of indigenous biological resources and associated traditional knowledge without prior informed consent (PIC) or fair Access and Benefit-Sharing (ABS). Famous examples include the revocation of the Turmeric wound-healing patent (US Patent 5,401,504) by CSIR citing ancient Sanskrit texts, and the Neem fungicide patent (EP 436257) by EPO. Under international patent frameworks (WIPO PCT, EPO Article 54, USPTO 35 U.S.C. 102), prior published traditional knowledge acts as novelty-destroying prior art.",
+        "citation": "CBD Nagoya Protocol on ABS; Turmeric Patent Revocation (US PTO Reexamination Cert. 5,401,504); Neem Fungicidal Patent Revocation (EPO EP0436257B1)",
+        "jurisdiction": ["india", "international"],
+    },
+    {
+        "id": "trade-secret-vs-patent",
+        "category": "IP Strategy & Trade Secrets",
+        "question": "When should an Ayurvedic enterprise choose Trade Secrets over Patent Protection?",
+        "answer": "If a formulation is derived from classical texts (Charaka Samhita, Sushruta Samhita, Sharangadhara Samhita), it faces strict patentability bars under Section 3(p). In such cases, proprietary extraction parameters, specific fermentation cycles (Asava/Arishta), purification methods (Shodhana), or trade dress/branding should be safeguarded as Trade Secrets through strict Non-Disclosure Agreements (NDAs), non-competes, and compartmentalized manufacturing, while protecting the commercial brand via Trademarks.",
+        "citation": "National IPR Policy 2016 (Objective 5); Indian Contract Act 1872 (Section 27 on confidentiality); Trade Secret Protection Guidelines",
+        "jurisdiction": ["india", "international"],
+    },
+    {
+        "id": "pct-international-filing",
+        "category": "International Patent Strategy",
+        "question": "How does the Patent Cooperation Treaty (PCT) route work for Ayurvedic inventions originating in India?",
+        "answer": "An Indian applicant developing an innovative Ayurvedic technology must first file an Indian priority application or obtain written foreign filing permission under Section 39 of the Patents Act, 1970 before filing overseas. An international PCT application filed within 12 months allows a single filing to reserve patent rights across 157+ member states. Applicants get up to 30/31 months from priority date to enter national phases (USPTO, EPO, JPO, etc.). Biological material disclosure requirements apply under WIPO guidelines.",
+        "citation": "Section 39, Indian Patents Act, 1970; Patent Cooperation Treaty (PCT) Articles 8 & 11; WIPO Standards for Genetic Resources and Traditional Knowledge",
+        "jurisdiction": ["india", "international"],
+    },
+    {
+        "id": "trademark-vs-patent",
+        "category": "Brand Protection & Trademarks",
+        "question": "Why is trademark registration essential for Ayurvedic proprietary formulations?",
+        "answer": "While patents grant a 20-year limited monopoly with strict disclosure and novelty hurdles, Trademarks provide indefinitely renewable exclusive brand ownership under the Trademarks Act, 1999. In Ayurvedic consumer products, brand recognition and doctor loyalty are long-term assets. Applicants should register distinctive word marks, logos, and packaging in Class 5 (Pharmaceutical and herbal preparations) and Class 3 (Cosmetics/herbal skincare), avoiding generic Sanskrit terms which are prohibited under Section 9.",
+        "citation": "Trademarks Act, 1999 (Sections 9, 11, 28); Nice Classification (Classes 3 & 5)",
+        "jurisdiction": ["india", "international"],
+    },
+    {
+        "id": "geographical-indication",
+        "category": "Geographical Indications (GI)",
+        "question": "How can Geographical Indication (GI) tag protect regional Ayurvedic herbs and heritage formulations?",
+        "answer": "Under the Geographical Indications of Goods (Registration and Protection) Act, 1999, regional producer collectives can register GI tags for herbs and formulations whose quality, reputation, or characteristics are attributable to their geographic origin (e.g., Navara Rice of Kerala, Alleppey Green Cardamom, Coorg Honey). A GI prevents unauthorized commercial exploitation and deceptive geographic claims by external parties.",
+        "citation": "Geographical Indications of Goods (Registration and Protection) Act, 1999 (Section 21 & 22); TRIPS Agreement (Articles 22-24)",
+        "jurisdiction": ["india", "international"],
+    },
+]

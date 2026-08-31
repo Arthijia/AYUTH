@@ -325,24 +325,17 @@ body {
     gap: var(--spacing-sm);
 }
 
-.badge {
-    display: inline-block;
-    padding: 0.25rem var(--spacing-md);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.badge-india {
-    background-color: var(--color-primary-light);
-    color: white;
-}
-
+.scope-indicator,
+#jurisdictionIndicator,
+.badge-india,
 .badge-intl {
-    background-color: var(--color-accent-rust);
-    color: white;
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
 }
 
 .chat-messages {
