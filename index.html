@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AYUTH - IP-SAKTI Sahayak</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <h1 id="appTitle" class="app-title" data-i18n="headerTitle">AYUTH</h1>
+                    <p id="appSubtitle" class="app-subtitle" data-i18n="headerSubtitle">IP-SAKTI Sahayak</p>
+                </div>
+                <div class="header-controls">
+                    <select id="languageSelect" class="control-select" aria-label="Select Language">
+                        <option value="en">English</option>
+                        <option value="hi">हिन्दी</option>
+                        <option value="kn">ಕನ್ನಡ</option>
+                    </select>
+                    <button id="settingsBtn" class="btn-icon" title="Settings" aria-label="Settings">⚙️</button>
+                    <button id="infoBtn" class="btn-icon" title="About" aria-label="About">ℹ️</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 data-i18n="settingsTitle">Settings</h2>
+                    <button class="modal-close" onclick="closeSettings()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h3 data-i18n="jurisdictionLabel">Jurisdiction</h3>
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="jurisdiction" value="india" checked>
+                                <span data-i18n="jurisdictionIndia">India Only</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="jurisdiction" value="international">
+                                <span data-i18n="jurisdictionIntl">International Regimes (WIPO, CBD)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3 data-i18n="apiKeyLabel">API Configuration</h3>
+                        <p data-i18n="apiHelpText" class="help-text">Enter your Gemini API key to enable Live AI mode. Leave empty to use Offline mode.</p>
+                        <div class="api-input-group">
+                            <input type="password" id="apiKeyInput" placeholder="Paste your Gemini API key here" class="input-text">
+                            <button id="toggleApiKeyVisibility" data-i18n="toggleVisibilityBtn" class="btn-secondary" onclick="toggleApiKeyVisibility()">👁️</button>
+                        </div>
+                        <p data-i18n="apiStatusLabel" class="status-text">Status: <span class="status-offline">Not Connected (Offline Mode)</span></p>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3 data-i18n="modelLabel">AI Model</h3>
+                        <select id="modelSelect" class="control-select">
+                            <option value="gemini-pro">Gemini Pro</option>
+                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3 data-i18n="dataLabel">Session Data</h3>
+                        <button data-i18n="clearSessionBtn" class="btn-danger" onclick="clearSession()">Clear All Session Data</button>
+                        <p data-i18n="clearWarning" class="warning-text">This will delete the invention profile and chat history.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-primary" data-i18n="closeSettingsBtn" onclick="closeSettings()">Done</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Modal -->
+        <div id="infoModal" class="modal hidden">
+            <div class="modal-content modal-wide">
+                <div class="modal-header">
+                    <h2 data-i18n="infoTitle">About AYUTH</h2>
+                    <button class="modal-close" onclick="closeInfo()">×</button>
+                </div>
+                <div class="modal-body">
+                    <h3 data-i18n="infoWhatIsHeading">What is AYUTH?</h3>
+                    <p data-i18n="infoWhatIs">AYUTH (IP-SAKTI Sahayak) is an AI-powered assistant that provides guidance on intellectual property (IP) and regulatory matters specific to Ayurvedic inventions and innovations.</p>
+                    
+                    <h3 data-i18n="infoScopeHeading">Scope</h3>
+                    <ul id="infoScopeList">
+                        <li data-i18n="infoScope1">Patent eligibility and inventive step</li>
+                        <li data-i18n="infoScope2">Traditional Knowledge (TK) and TKDL overlaps</li>
+                        <li data-i18n="infoScope3">Biological resource rules and biopiracy prevention</li>
+                        <li data-i18n="infoScope4">Trademarks vs. Patents</li>
+                        <li data-i18n="infoScope5">Geographical Indications (GI)</li>
+                        <li data-i18n="infoScope6">AYUSH manufacturing licenses</li>
+                        <li data-i18n="infoScope7">International filing routes</li>
+                    </ul>
+
+                    <h3 data-i18n="infoNotScopeHeading">NOT Covered</h3>
+                    <p data-i18n="infoNotScope">Medical advice, treatment claims, clinical efficacy, or therapeutic guidance. For health-related questions, consult a qualified healthcare provider.</p>
+
+                    <h3 data-i18n="infoDisclaimerHeading">Important Disclaimer</h3>
+                    <p data-i18n="infoDisclaimer">This tool provides informational guidance only and is NOT a substitute for professional legal advice from a registered patent attorney or IP counselor. Always consult qualified professionals before filing patents or making regulatory submissions.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar Navigation -->
+            <nav class="sidebar">
+                <div class="nav-section">
+                    <h3 id="navMain" data-i18n="navMain">Main</h3>
+                    <button class="nav-btn active" data-tab="chat" onclick="switchTab('chat')">
+                        <span class="nav-icon">💬</span>
+                        <span id="navChat" data-i18n="navChat">Chat</span>
+                    </button>
+                    <button class="nav-btn" data-tab="classifier" onclick="switchTab('classifier')">
+                        <span class="nav-icon">📋</span>
+                        <span id="navClassifier" data-i18n="navClassifier">Invention Profile</span>
+                    </button>
+                    <button class="nav-btn" data-tab="locker" onclick="switchTab('locker')">
+                        <span class="nav-icon">🔒</span>
+                        <span id="navLocker" data-i18n="navLocker">Invention Locker</span>
+                    </button>
+                </div>
+
+                <div class="nav-section">
+                    <h3 id="navKnowledge" data-i18n="navKnowledge">Knowledge Base</h3>
+                    <button class="nav-btn" data-tab="kb" onclick="switchTab('kb')">
+                        <span class="nav-icon">📚</span>
+                        <span id="navKB" data-i18n="navKB">Q&A Library</span>
+                    </button>
+                </div>
+
+                <div class="nav-section">
+                    <h3 id="navSession" data-i18n="navSession">Session</h3>
+                    <div class="session-info">
+                        <p><span id="sessionStatus" data-i18n="sessionStatus">Profile:</span> <span id="profileStatus">Not Set</span></p>
+                        <p><span id="sessionMessages" data-i18n="sessionMessages">Messages:</span> <span id="messageCount">0</span></p>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Chat Tab -->
+                <div id="chatTab" class="tab-content active">
+                    <div class="chat-container">
+                        <div class="chat-header">
+                            <h2 id="chatTitle" data-i18n="chatTitle">IP & Regulatory Guidance Chat</h2>
+                            <div class="scope-indicator">
+                                <span id="jurisdictionIndicator" class="badge badge-india">India Only</span>
+                            </div>
+                        </div>
+
+                        <div id="chatMessages" class="chat-messages">
+                            <!-- Messages will be appended here -->
+                        </div>
+
+                        <div id="chatInputArea" class="chat-input-area">
+                            <div class="input-wrapper">
+                                <textarea id="chatInput" class="chat-input" placeholder="Ask about IP, patents, TK overlaps, regulatory licensing..." rows="3" aria-label="Chat input"></textarea>
+                                <button id="sendBtn" class="btn-send" data-i18n="sendBtn" onclick="sendMessage()">Send</button>
+                            </div>
+                            <p id="disclaimerFooter" class="disclaimer-footer" data-i18n="disclaimerFooter">This is informational guidance, not a substitute for a registered patent attorney.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invention Classifier Tab -->
+                <div id="classifierTab" class="tab-content hidden">
+                    <div class="classifier-container">
+                        <h2 id="classifierTitle" data-i18n="classifierTitle">Invention Profile Builder</h2>
+                        <p id="classifierDescription" data-i18n="classifierDescription">Answer these 5 questions to build your invention profile. This helps AYUTH provide better guidance tailored to your innovation.</p>
+
+                        <form id="classifierForm" class="classifier-form">
+                            <div class="form-group">
+                                <label for="q1" id="q1Label" data-i18n="q1Label">1. What is your invention? (Brief description)</label>
+                                <textarea id="q1" class="input-text" rows="4" placeholder="e.g., A new formulation combining Ashwagandha with bioavailability enhancers..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="q2" id="q2Label" data-i18n="q2Label">2. What problem does it solve?</label>
+                                <textarea id="q2" class="input-text" rows="3" placeholder="e.g., Current formulations have poor absorption, limiting clinical efficacy..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="q3" id="q3Label" data-i18n="q3Label">3. What is technically novel about it?</label>
+                                <textarea id="q3" class="input-text" rows="3" placeholder="e.g., The specific ratio of ingredients and the stabilization process are new..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="q4" id="q4Label" data-i18n="q4Label">4. Has it been publicly disclosed before? (Publications, social media, presentations)</label>
+                                <select id="q4" class="input-select">
+                                    <option value="">-- Select --</option>
+                                    <option value="no">No</option>
+                                    <option value="yes_limited">Yes, in limited circles (confidential discussions)</option>
+                                    <option value="yes_public">Yes, publicly (papers, presentations, social media)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="q5" id="q5Label" data-i18n="q5Label">5. Does it use biological resources or traditional knowledge?</label>
+                                <select id="q5" class="input-select">
+                                    <option value="">-- Select --</option>
+                                    <option value="no">No, purely synthetic or non-biological</option>
+                                    <option value="biological_nontraditional">Yes, biological resources but not traditional knowledge</option>
+                                    <option value="traditional_knowledge">Yes, traditional knowledge (e.g., Vedic, Siddha, Unani practices)</option>
+                                    <option value="both">Yes, both biological resources and traditional knowledge</option>
+                                </select>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" class="btn-primary" id="saveProfileBtn" data-i18n="saveProfileBtn" onclick="saveInventionProfile()">Save Profile</button>
+                                <button type="button" class="btn-secondary" id="clearProfileBtn" data-i18n="clearProfileBtn" onclick="clearInventionProfile()">Clear</button>
+                            </div>
+                        </form>
+
+                        <div id="profileSummary" class="profile-summary hidden">
+                            <h3 id="profileSummaryTitle" data-i18n="profileSummaryTitle">Current Profile</h3>
+                            <div id="profileContent"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invention Locker Tab -->
+                <div id="lockerTab" class="tab-content hidden">
+                    <div class="locker-container">
+                        <h2 id="lockerTitle" data-i18n="lockerTitle">Invention Locker</h2>
+                        <p id="lockerDescription" data-i18n="lockerDescription">Create a timestamped proof-of-conception record by hashing your invention description. This is stored locally in your browser — never uploaded anywhere.</p>
+
+                        <div class="locker-form">
+                            <div class="form-group">
+                                <label for="inventionText" id="inventionTextLabel" data-i18n="inventionTextLabel">Paste your invention description:</label>
+                                <textarea id="inventionText" class="input-text" rows="6" placeholder="Full description of your invention, including technical details, methodology, expected benefits..."></textarea>
+                            </div>
+
+                            <button id="generateHashBtn" class="btn-primary" data-i18n="generateHashBtn" onclick="generateInventionHash()">Generate Hash & Timestamp</button>
+                        </div>
+
+                        <div id="hashResult" class="hash-result hidden">
+                            <h3 id="hashResultTitle" data-i18n="hashResultTitle">Your Proof-of-Conception Receipt</h3>
+                            <p id="hashNote" data-i18n="hashNote">Screenshot or save this receipt as your informal proof-of-conception evidence.</p>
+                            
+                            <div class="hash-display">
+                                <div class="hash-field">
+                                    <label id="hashTimestampLabel" data-i18n="hashTimestampLabel">Timestamp:</label>
+                                    <p id="hashTimestampValue" class="hash-value"></p>
+                                </div>
+                                <div class="hash-field">
+                                    <label id="hashValueLabel" data-i18n="hashValueLabel">SHA-256 Hash:</label>
+                                    <p id="hashValue" class="hash-value monospace"></p>
+                                </div>
+                                <div class="hash-field">
+                                    <label id="hashSizeLabel" data-i18n="hashSizeLabel">Text Size:</label>
+                                    <p id="hashSize" class="hash-value"></p>
+                                </div>
+                            </div>
+
+                            <div class="hash-actions">
+                                <button id="screenshotBtn" class="btn-secondary" data-i18n="screenshotBtn" onclick="screenshotReceipt()">📸 Screenshot Receipt</button>
+                                <button id="copyHashBtn" class="btn-secondary" data-i18n="copyHashBtn" onclick="copyHashToClipboard()">📋 Copy Hash</button>
+                            </div>
+
+                            <p id="lockerPrivacyNote" class="privacy-note" data-i18n="lockerPrivacyNote">✓ Completely private: No data is stored on any server. Your invention text is never uploaded or transmitted.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Knowledge Base Tab -->
+                <div id="kbTab" class="tab-content hidden">
+                    <div class="kb-container">
+                        <h2 id="kbTitle" data-i18n="kbTitle">Offline Knowledge Base</h2>
+                        <p id="kbDescription" data-i18n="kbDescription">Curated Q&A on common IP and regulatory questions for Ayurvedic inventions.</p>
+
+                        <div class="kb-search">
+                            <input type="text" id="kbSearch" class="input-text" placeholder="Search Q&A..." onkeyup="filterKnowledgeBase()">
+                        </div>
+
+                        <div id="kbContent" class="kb-content">
+                            <!-- KB entries will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="i18n.js"></script>
+    <script src="knowledge-base.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

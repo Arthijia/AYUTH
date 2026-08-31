@@ -1,0 +1,86 @@
+# AYUTH - .gitignore
+# Files and directories to exclude from version control
+
+# API Keys & Secrets (NEVER commit these!)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+api-keys.txt
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# Node (if using build tools in future)
+node_modules/
+package-lock.json
+yarn.lock
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local development
+localhost-notes.txt
+test-profiles/
+backup/
+
+# Sensitive information
+credentials.json
+secrets.json
+auth-tokens.txt
+
+# Build artifacts
+*.min.js
+*.min.css
+*.tar.gz
+*.zip
+
+# Temp files
+.temp/
+tmp/
+temp/
+
+# Browser storage backups
+*.bak
+*.backup
+
+# Never track user data exports
+user-data-export/
+chat-backups/
+
+# Git-related
+.git/
+.gitkeep
+
+# Branch protection
+BRANCH_PROTECTION_RULES

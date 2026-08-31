@@ -1,0 +1,17 @@
+{
+  "name": "ayuth-rag-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.21.2",
+    "lancedb": "^0.18.0"
+  }
+}
