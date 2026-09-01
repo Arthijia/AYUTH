@@ -102,13 +102,47 @@ export default function App() {
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
+        let errJson = null;
+        try {
+          errJson = await res.json();
+        } catch (_) {}
+        console.error(`Backend returned HTTP ${res.status}:`, errJson);
+        const localizedError = getTranslation('errorProcessing', language);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: localizedError,
+            rag_used: false,
+            sources: [],
+            proof_documents: [],
+            citations: [],
+          },
+        ]);
+        return;
       }
 
       const data = await res.json();
+      if (data.status === "error" || data.success === false) {
+        console.error("Backend error response:", data);
+        const localizedError = data.user_message || data.answer || getTranslation('errorProcessing', language);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: localizedError,
+            rag_used: false,
+            sources: [],
+            proof_documents: [],
+            citations: [],
+          },
+        ]);
+        return;
+      }
+
       const assistantMsg = {
         role: 'assistant',
-        content: data.answer,
+        content: data.answer || getTranslation('errorProcessing', language),
         rag_used: Boolean(data.rag_used),
         sources: data.sources || data.proof_documents || [],
         proof_documents: data.proof_documents || data.sources || [],
@@ -116,12 +150,15 @@ export default function App() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
-      console.error("Chat error:", err);
+      console.error("Network or fetch error:", err);
+      const networkErrorMsg = getTranslation('errorNetwork', language);
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: `⚠️ Failed to complete RAG synthesis: ${err.message}. Please check that the backend server is active.`,
+          content: networkErrorMsg,
+          rag_used: false,
+          sources: [],
           proof_documents: [],
           citations: [],
         },

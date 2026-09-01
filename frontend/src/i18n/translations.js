@@ -91,6 +91,8 @@ export const TRANSLATIONS = {
     infoNotScope: "No medical diagnosis, therapeutic treatment claims, or personal health prescriptions.",
     infoDisclaimerHeading: "Statutory Disclaimer",
     infoDisclaimer: "Informational guidance only. Does not constitute formal legal counsel from a registered patent attorney.",
+    errorNetwork: "⚠️ Unable to connect to the AYUTH service. Please ensure the network connection and backend server are active.",
+    errorProcessing: "⚠️ A processing error occurred while generating the advisory. Please rephrase or try again in a moment.",
   },
 
   zh: {
@@ -471,6 +473,8 @@ export const TRANSLATIONS = {
     infoNotScope: "कोई चिकित्सा निदान, उपचार के दावे या व्यक्तिगत नुस्खे नहीं।",
     infoDisclaimerHeading: "वैधानिक अस्वीकरण",
     infoDisclaimer: "केवल सूचनात्मक मार्गदर्शन। पंजीकृत पेटेंट वकील की औपचारिक कानूनी सलाह का स्थान नहीं लेता है।",
+    errorNetwork: "⚠️ AYUTH सर्वर से कनेक्ट नहीं हो पा रहा है। कृपया इंटरनेट कनेक्शन और सर्वर की जांच करें।",
+    errorProcessing: "⚠️ सूचना को संसाधित करते समय एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
   },
 
   kn: {
@@ -623,6 +627,8 @@ export const TRANSLATIONS = {
     infoNotScope: "மருத்துவ நோயறிதல் அல்லது சிகிச்சை பரிந்துரைகள் வழங்கப்படாது.",
     infoDisclaimerHeading: "சட்ட மறுப்பு",
     infoDisclaimer: "தகவல் வழிகாட்டல் மட்டுமே. பதிவுசெய்த வழக்கறிஞரின் சட்ட ஆலோசனைக்கு மாற்றாகாது.",
+    errorNetwork: "⚠️ AYUTH சேவையகத்தை தொடர்பு கொள்ள முடியவில்லை. தயவுசெய்து இணைய இணைப்பு மற்றும் சேவையகத்தை சரிபார்க்கவும்.",
+    errorProcessing: "⚠️ தகவலை செயலாக்கும்போது ஒரு சிக்கல் ஏற்பட்டது. தயவுசெய்து மீண்டும் முயற்சிக்கவும்.",
   },
 
   te: {
@@ -1155,6 +1161,8 @@ export const TRANSLATIONS = {
     infoNotScope: "의학적 진단, 치료적 효능 보증 또는 개인 건강 처방은 제공하지 않습니다.",
     infoDisclaimerHeading: "법적 고지사항",
     infoDisclaimer: "본 서비스는 정보 제공 목적의 안내이며, 공인 변리사 또는 변호사의 정식 법률 자문을 구성하지 않습니다.",
+    errorNetwork: "⚠️ AYUTH 서버에 연결할 수 없습니다. 네트워크 연결 및 백엔드 서버 상태를 확인해주세요.",
+    errorProcessing: "⚠️ 정보를 처리하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
   },
 };
 

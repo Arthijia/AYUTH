@@ -1,4 +1,18 @@
 import os
+import sys
+
+# Ensure Windows console uses UTF-8 without crashing on Tamil, Hindi, Korean, Arabic, etc.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -92,6 +106,12 @@ async def upload_document(payload: DocumentUploadRequest):
     })
     return {"status": "success", "message": "Document indexed successfully into AYUTH knowledge base", "document": new_doc}
 
+import logging
+import traceback
+
+logger = logging.getLogger("ayuth")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest):
     query_text = (payload.message or payload.question or "").strip()
@@ -110,7 +130,32 @@ async def chat_endpoint(payload: ChatRequest):
         )
         return response
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"[AYUTH Error] Exception occurred during chat synthesis: {e}")
+        traceback.print_exc()
+        # Return a structured failure object that does not crash the frontend
+        target_lang = payload.language or "en"
+        if target_lang == "ta":
+            friendly_msg = "தகவலை செயலாக்கும்போது ஒரு சிக்கல் ஏற்பட்டது. தயவுசெய்து உங்கள் கண்டுபிடிப்பு அல்லது கேள்வியை மீண்டும் பகிரவும்."
+        elif target_lang == "hi":
+            friendly_msg = "सूचना को संसाधित करते समय एक त्रुटि हुई। कृपया अपने आविष्कार या प्रश्न का विवरण पुनः साझा करें।"
+        elif target_lang == "ko":
+            friendly_msg = "정보를 처리하는 중 오류가 발생했습니다. 발명 내용이나 질문을 다시 입력해 주세요."
+        else:
+            friendly_msg = "A temporary processing error occurred while generating the advisory. Please rephrase or share more details about your invention."
+
+        return {
+            "success": False,
+            "status": "error",
+            "error_code": "RAG_PROCESSING_ERROR",
+            "answer": friendly_msg,
+            "user_message": friendly_msg,
+            "language": target_lang,
+            "intent": "ERROR_FALLBACK",
+            "rag_used": False,
+            "sources": [],
+            "proof_documents": [],
+            "citations": []
+        }
 
 @app.post("/api/rag/search")
 async def rag_search(payload: Dict[str, Any] = Body(...)):

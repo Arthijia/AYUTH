@@ -8,8 +8,22 @@ Provides:
 - Multi-Turn Session State & Repeated Intent Tracking
 """
 
+import sys
 import re
 from typing import Dict, Any, List, Optional
+
+# Ensure Windows console uses UTF-8 without crashing on Tamil, Hindi, Korean, Arabic, etc.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from langdetect import detect_langs, DetectorFactory
 DetectorFactory.seed = 0
 
