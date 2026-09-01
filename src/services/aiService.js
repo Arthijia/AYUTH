@@ -34,7 +34,8 @@ export function getAiProviderInfo() {
  * Create a Groq SDK client instance
  */
 export function createGroqClient(customApiKey = null) {
-  const apiKey = customApiKey || config.groqApiKey;
+  const isCustomValid = customApiKey && typeof customApiKey === 'string' && customApiKey.trim().startsWith('gsk_');
+  const apiKey = isCustomValid ? customApiKey.trim() : config.groqApiKey;
   if (!apiKey) {
     throw new Error('No Groq API key configured. Please set GROQ_API_KEY in backend/.env or provide apiKey in the request.');
   }
@@ -60,9 +61,10 @@ export async function generateChatCompletion(messages, options = {}) {
   // Models to attempt within Groq ONLY (No Gemini fallback)
   const modelsToTry = [
     model,
-    'llama-3.3-70b-versatile',
-    'llama-3.1-70b-versatile',
-    'llama-3.1-8b-instant',
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b',
+    'groq/compound',
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   let lastError = null;

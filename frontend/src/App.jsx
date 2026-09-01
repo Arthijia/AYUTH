@@ -95,7 +95,7 @@ export default function App() {
       jurisdiction: 'all',
       inventionProfile: profile,
       language: language,
-      apiKey: apiKey || undefined,
+      apiKey: apiKey && apiKey.trim().startsWith('gsk_') ? apiKey.trim() : undefined,
     };
 
     console.log(`[AYUTH Client] 🚀 POST ${API_ENDPOINTS.CHAT}`, payload);
