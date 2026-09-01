@@ -25,7 +25,7 @@ const LANGUAGE_NAMES = {
 export function getAiProviderInfo() {
   return {
     chatProvider: 'groq',
-    chat: config.groqModel || 'openai/gpt-oss-120b',
+    chat: config.groqModel || 'openai/gpt-oss-20b',
     hasGroqApiKey: Boolean(config.groqApiKey),
   };
 }
@@ -43,41 +43,49 @@ export function createGroqClient(customApiKey = null) {
 }
 
 /**
- * Execute Groq Chat Completion with strict error handling and Groq-only model fallbacks
+ * Execute Groq Chat Completion with fast timeouts and instant model fallbacks
  * @param {Array<{role: string, content: string}>} messages - Chat messages
- * @param {Object} [options] - Options (temperature, maxTokens, model, customApiKey)
+ * @param {Object} [options] - Options (temperature, maxTokens, model, customApiKey, timeoutMs)
  * @returns {Promise<{content: string, model: string, usage: Object}>}
  */
 export async function generateChatCompletion(messages, options = {}) {
   const {
     temperature = 0.2,
-    maxTokens = 1800,
-    model = config.groqModel || 'openai/gpt-oss-120b',
+    maxTokens = 1200,
+    model = config.groqModel || 'openai/gpt-oss-20b',
     customApiKey = null,
+    timeoutMs = 6000,
   } = options;
 
   const groq = createGroqClient(customApiKey);
 
-  // Models to attempt within Groq ONLY (No Gemini fallback)
+  // Fast, highly-available Groq models in order of latency and reliability
   const modelsToTry = [
     model,
-    'openai/gpt-oss-120b',
     'openai/gpt-oss-20b',
     'qwen/qwen3.8-27b',
     'groq/compound',
+    'openai/gpt-oss-120b',
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   let lastError = null;
 
   for (const modelCandidate of modelsToTry) {
     try {
-      console.log(`[Groq AI] Calling model: ${modelCandidate}...`);
-      const completion = await groq.chat.completions.create({
+      console.log(`[Groq AI] Requesting inference from model: ${modelCandidate}...`);
+
+      const completionPromise = groq.chat.completions.create({
         messages,
         model: modelCandidate,
         temperature,
         max_tokens: maxTokens,
       });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Model ${modelCandidate} response timed out after ${timeoutMs}ms`)), timeoutMs)
+      );
+
+      const completion = await Promise.race([completionPromise, timeoutPromise]);
 
       const responseText = completion.choices?.[0]?.message?.content;
       if (responseText) {
@@ -89,7 +97,7 @@ export async function generateChatCompletion(messages, options = {}) {
       }
     } catch (err) {
       lastError = err;
-      console.warn(`[Groq AI Error] Model ${modelCandidate} failed: ${err.message}`);
+      console.warn(`[Groq AI Warning] Model ${modelCandidate} failed/timed out: ${err.message}`);
 
       // If it is an invalid API key, do not retry other models
       if (err.status === 401 || err.message?.includes('Invalid API Key') || err.message?.includes('authentication')) {
@@ -194,7 +202,8 @@ ${profileSummary}`;
   const result = await generateChatCompletion(messages, {
     customApiKey,
     temperature: 0.2,
-    maxTokens: intent === 'GIBBERISH' || intent === 'GREETING' ? 300 : 1800,
+    maxTokens: intent === 'GIBBERISH' || intent === 'GREETING' ? 250 : 1200,
+    timeoutMs: 6000,
   });
 
   return {

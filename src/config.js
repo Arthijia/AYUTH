@@ -20,9 +20,9 @@ if (fs.existsSync(rootEnvPath)) {
 export const config = {
   port: Number(process.env.PORT || 8000),
   groqApiKey: process.env.GROQ_API_KEY || null,
-  groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+  groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
   chatProvider: 'groq',
-  chatModel: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+  chatModel: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
   embeddingModel: process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004',
   vectorDbPath: path.join(dataDir, 'ayuth_lancedb'),
   tableName: 'ayuth_knowledge',
