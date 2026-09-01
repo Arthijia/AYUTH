@@ -124,13 +124,15 @@ export async function generateChatCompletion(messages, options = {}) {
 }
 
 /**
- * Synthesize grounded RAG answer using Groq as the exclusive LLM with dynamic intent awareness
+ * Synthesize grounded RAG answer using Groq as the exclusive LLM with intelligent intent and advisory principles
  */
 export async function generateGroundedRagResponse({
   question,
   intent = 'INVENTION_OR_LEGAL',
+  answerStyle = 'NORMAL',
   retrievedDocs = [],
   inventionProfile = {},
+  history = [],
   language = 'en',
   customApiKey = null,
 }) {
@@ -153,12 +155,12 @@ TASK:
 - Respond warmly and naturally in ${targetLanguageName}, introducing yourself as AYUTH.
 - Briefly state how you can help (evaluating Ayurvedic formulations, overcoming Section 3(p)/3(e)/3(d) objections, TKDL overlap analysis, and patent strategy).
 - Ask how you can assist their research or invention today.
-- Keep the response welcoming and concise (2-4 sentences). Do NOT output huge pre-made tables or boilerplate evaluation matrices for simple greetings.`;
+- Keep the response welcoming and concise (2-3 sentences). Do NOT output huge pre-made tables or boilerplate evaluation matrices for simple greetings.`;
   } else if (intent === 'CASUAL') {
     systemPrompt = `You are AYUTH, an expert AI assistant for Ayurvedic intellectual property and patent law.
 The user sent a casual remark or conversational message: "${question}".
 TASK:
-- Respond conversationally and helpfully in ${targetLanguageName}.
+- Respond conversationally, concisely, and helpfully in ${targetLanguageName}.
 - If appropriate, invite them to share their patent or Ayurvedic formulation inquiries.`;
   } else {
     // Substantive Knowledge Query or Invention Disclosure
@@ -174,35 +176,75 @@ TASK:
       ? JSON.stringify(inventionProfile, null, 2)
       : 'No specific invention profile submitted.';
 
-    systemPrompt = `You are AYUTH, an expert AI legal and regulatory assistant specializing in Ayurvedic intellectual property (IP), traditional knowledge protection (TKDL), patentability under the Indian Patents Act, 1970, and biodiversity compliance under the Biological Diversity Act, 2002.
+    let lengthInstruction = '';
+    if (answerStyle === 'BRIEF') {
+      lengthInstruction = 'The user requested a BRIEF / CONCISE explanation. Give a crisp answer in max 3 to 5 short paragraphs or bullet points. Avoid filler.';
+    } else if (answerStyle === 'DETAILED') {
+      lengthInstruction = 'The user requested a DETAILED / IN-DEPTH analysis. Provide a thorough, step-by-step breakdown covering legal provisions, mechanisms, evidence requirements, and strategic recommendations.';
+    } else {
+      lengthInstruction = 'Provide a clear, well-structured explanation: Direct answer first, followed by brief statutory context and actionable next steps.';
+    }
 
-STRICT INSTRUCTIONS:
-1. Directly answer the user's specific inquiry or evaluate their submitted invention using the RETRIEVED CONTEXT and established IP statutes.
-2. If the user asks a specific question (e.g., about Section 3(p), Section 3(e), TKDL, or NBA approval), directly answer THAT specific question. Do not produce unnecessary generic filler.
-3. If the user describes an invention, perform a comparative evaluation highlighting:
-   - Traditional Knowledge & Section 3(p) risks
-   - Synergism requirements under Section 3(e)
-   - Therapeutic efficacy under Section 3(d)
-   - Biological Diversity Act / NBA requirements
-4. LANGUAGE REQUIREMENT: The user has selected the language: ${targetLanguageName} (${language}). You MUST write your ENTIRE explanation, headings, and answer in ${targetLanguageName} (using accurate grammar and authentic native script for that language). Keep statutory act names (e.g., Patents Act 1970, Section 3(p), Biological Diversity Act 2002, TKDL) clearly recognizable.
-5. Always end your response with the disclaimer translated appropriately into ${targetLanguageName} (e.g. "This is informational guidance, not a substitute for a registered patent attorney.").
+    systemPrompt = `You are AYUTH, an intelligent AI legal and strategic patent advisor specializing in Ayurvedic Intellectual Property (IP), Traditional Knowledge Digital Library (TKDL), Indian Patent Law (Patents Act 1970, Sections 3(p), 3(e), 3(d)), and Biodiversity compliance (Biological Diversity Act 2002 / NBA).
 
-=== RETRIEVED STATUTORY CONTEXT ===
-${contextText}
+CORE ADVISORY PRINCIPLES:
+1. UNDERSTAND USER INTENT:
+   - Users may ask vague, incomplete, grammatically imperfect, or non-technical questions. Infer what they are trying to understand rather than taking their literal words blindly.
+   - If a question is ambiguous (e.g. "Is there a patent for America?" in the context of turmeric), answer the most likely interpretation first (e.g. the famous US turmeric wound-healing patent revocation case) and briefly mention other interpretations if needed.
 
-=== INVENTION PROFILE ===
-${profileSummary}`;
+2. PROACTIVE GUIDANCE:
+   - Proactively connect strongly related historical cases and statutory concepts even if the user didn't know to ask about them (e.g., US Turmeric patent revocation, Neem European patent invalidation, TKDL prior art defense, Section 3(p) traditional knowledge bar, Section 3(e) synergistic admixture requirement).
+
+3. EXPERT SYNTHESIS (NO DOCUMENT DUMPING):
+   - Never copy raw document chunks or produce generic disconnected boilerplate tables.
+   - Explain the meaning in a friendly, authoritative advisor tone.
+
+4. RESPONSE STRUCTURE:
+   1. Direct Answer First (Clear, simple verdict or answer).
+   2. Brief Explanation & Legal/Scientific Basis (Explain the law/mechanism simply).
+   3. Why It Matters & Strategic Implications (Practical advice, hurdles, TKDL risks).
+   4. Clear Next Step / Recommendation (What the user should do next).
+
+5. PERSONALIZATION:
+   - If the user provided an invention profile or formulation details (${profileSummary}), connect the patent principles directly to their invention.
+
+6. LENGTH CONTROL:
+   - ${lengthInstruction}
+
+7. LANGUAGE REQUIREMENT:
+   - The user has selected the language: ${targetLanguageName} (${language}).
+   - You MUST write your ENTIRE explanation, headings, and recommendations in ${targetLanguageName} (using natural grammar and native script). Keep statutory names (e.g. Section 3(p), Section 3(e), Patents Act 1970, TKDL, NBA) recognizable.
+   - Always conclude with the informational disclaimer in ${targetLanguageName}: "*This is informational guidance, not a substitute for a registered patent attorney.*"
+
+=== RETRIEVED STATUTORY & CASE EVIDENCE ===
+${contextText}`;
   }
 
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: question },
-  ];
+  const messages = [];
+
+  // Add conversation history if available
+  if (Array.isArray(history) && history.length > 0) {
+    const validHistory = history
+      .slice(-4)
+      .filter((h) => h && h.role && h.content)
+      .map((h) => ({ role: h.role === 'user' ? 'user' : 'assistant', content: String(h.content) }));
+    messages.push(...validHistory);
+  }
+
+  messages.unshift({ role: 'system', content: systemPrompt });
+  messages.push({ role: 'user', content: question });
+
+  const maxTokensMap = {
+    GIBBERISH: 200,
+    GREETING: 250,
+    CASUAL: 350,
+    INVENTION_OR_LEGAL: answerStyle === 'BRIEF' ? 500 : answerStyle === 'DETAILED' ? 1800 : 1100,
+  };
 
   const result = await generateChatCompletion(messages, {
     customApiKey,
     temperature: 0.2,
-    maxTokens: intent === 'GIBBERISH' || intent === 'GREETING' ? 250 : 1200,
+    maxTokens: maxTokensMap[intent] || 1100,
     timeoutMs: 6000,
   });
 

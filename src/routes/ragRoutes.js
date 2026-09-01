@@ -46,6 +46,7 @@ async function handleRagQuery(req, res) {
     const {
       question,
       message,
+      history = [],
       jurisdiction = 'india',
       inventionProfile = {},
       apiKey = null,
@@ -60,6 +61,7 @@ async function handleRagQuery(req, res) {
 
     const ragResult = await executeRagPipeline({
       question: userQuery,
+      history,
       jurisdiction,
       inventionProfile,
       apiKey,
