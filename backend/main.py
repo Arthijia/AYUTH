@@ -13,7 +13,8 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File, Form
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -29,6 +30,15 @@ from services.rag_service import (
     get_invention_records,
 )
 from services.classifier_service import evaluate_invention_profile
+from services.locker_service import (
+    save_uploaded_evidence_file,
+    create_invention_locker_record,
+    list_all_locker_records,
+    get_locker_record_by_id,
+    get_evidence_file_path,
+    generate_locker_record_id,
+    generate_receipt_text,
+)
 from database import is_supabase_configured
 
 app = FastAPI(
@@ -174,25 +184,154 @@ async def classify_invention(payload: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=400, detail="Missing invention profile")
     return evaluate_invention_profile(profile)
 
+class CreateLockerRecordRequest(BaseModel):
+    title: Optional[str] = "Ayurvedic Invention Record"
+    description: str
+    record_id: Optional[str] = None
+    files: Optional[List[Dict[str, Any]]] = []
+    meta_info: Optional[Dict[str, Any]] = None
+    problem: Optional[str] = ""
+    novelty: Optional[str] = ""
+    disclosure: Optional[str] = ""
+    bioResources: Optional[str] = ""
+
+@app.post("/api/locker/upload")
+async def locker_upload_evidence(
+    files: List[UploadFile] = File(...),
+    record_id: Optional[str] = Form(None),
+    metadata_json: Optional[str] = Form(None)
+):
+    """
+    Accepts multiple documents, images, and video proofs.
+    Streams directly to disk and computes SHA-256 chunk-by-chunk without modifying the original bytes.
+    """
+    r_id = record_id.strip() if record_id and record_id.strip() else generate_locker_record_id()
+    client_meta = {}
+    if metadata_json:
+        try:
+            client_meta = json.loads(metadata_json)
+        except Exception:
+            pass
+
+    saved_files = []
+    errors = []
+
+    for upload in files:
+        filename = upload.filename or "unnamed_evidence"
+        try:
+            file_info = save_uploaded_evidence_file(
+                file_obj=upload.file,
+                filename=filename,
+                record_id=r_id,
+                client_metadata=client_meta.get(filename, {})
+            )
+            saved_files.append(file_info)
+        except Exception as e:
+            logger.exception(f"Error uploading evidence file {filename}: {e}")
+            errors.append({"file": filename, "error": str(e)})
+
+    return {
+        "status": "success" if saved_files else "error",
+        "record_id": r_id,
+        "uploaded_files": saved_files,
+        "total_uploaded": len(saved_files),
+        "errors": errors
+    }
+
+@app.post("/api/locker/create")
+async def locker_create_record(payload: CreateLockerRecordRequest):
+    """
+    Finalizes the Invention Locker Record, computes the Master SHA-256 Hash across all files and description,
+    and returns a verified proof-of-conception receipt.
+    """
+    if not payload.description.strip() and not payload.files:
+        raise HTTPException(status_code=400, detail="Invention technical description or evidence files required")
+
+    r_id = payload.record_id or generate_locker_record_id()
+    record = create_invention_locker_record(
+        title=payload.title or "Ayurvedic Invention Record",
+        description=payload.description,
+        files=payload.files or [],
+        record_id=r_id,
+        meta_info={
+            "problem": payload.problem,
+            "novelty": payload.novelty,
+            "disclosure": payload.disclosure,
+            "bioResources": payload.bioResources,
+            **(payload.meta_info or {})
+        }
+    )
+
+    # Maintain backward compatibility with in-memory store
+    save_invention_record({
+        "id": r_id,
+        "title": record["title"],
+        "description": record["description"],
+        "sha256Hash": record["master_sha256"],
+        "master_sha256": record["master_sha256"],
+        "files_count": len(record["files"]),
+        "timestamp_utc": record["timestamp_utc"],
+    })
+
+    return {
+        "status": "success",
+        "message": "Invention Locker Record cryptographically sealed with Master SHA-256",
+        "record": record
+    }
+
+@app.get("/api/locker/records")
+async def locker_get_records():
+    records = list_all_locker_records()
+    return {"status": "success", "records": records, "total": len(records)}
+
+@app.get("/api/locker/records/{record_id}")
+async def locker_get_record(record_id: str):
+    rec = get_locker_record_by_id(record_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Locker record not found")
+    return {"status": "success", "record": rec}
+
+@app.get("/api/locker/records/{record_id}/files/{file_type}/{filename}")
+async def locker_get_file(record_id: str, file_type: str, filename: str):
+    path = get_evidence_file_path(record_id, file_type, filename)
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Requested evidence file not found")
+    return FileResponse(path, filename=filename)
+
+@app.get("/api/locker/records/{record_id}/receipt")
+async def locker_download_receipt(record_id: str):
+    rec = get_locker_record_by_id(record_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Locker record not found")
+    receipt_text = rec.get("receipt_text", "")
+    return PlainTextResponse(
+        content=receipt_text,
+        headers={"Content-Disposition": f"attachment; filename=AYUTH_Proof_{record_id}.txt"}
+    )
+
 @app.post("/api/inventions/save")
 async def save_invention(payload: SaveInventionRequest):
     if not payload.description.strip():
         raise HTTPException(status_code=400, detail="Invention description is required")
 
-    record = save_invention_record({
-        "title": payload.title,
-        "description": payload.description,
-        "problem": payload.problem,
-        "novelty": payload.novelty,
-        "disclosure": payload.disclosure,
-        "bioResources": payload.bioResources,
-        "sha256Hash": payload.sha256Hash,
-    })
+    record = create_invention_locker_record(
+        title=payload.title or "Ayurvedic Invention Record",
+        description=payload.description,
+        files=[],
+        meta_info={
+            "problem": payload.problem,
+            "novelty": payload.novelty,
+            "disclosure": payload.disclosure,
+            "bioResources": payload.bioResources,
+            "sha256Hash": payload.sha256Hash
+        }
+    )
     return {"status": "success", "message": "Invention document timestamped and saved successfully", "record": record}
 
 @app.get("/api/inventions")
 async def get_inventions():
-    return {"records": get_invention_records(), "total": len(get_invention_records())}
+    records = list_all_locker_records()
+    return {"records": records, "total": len(records)}
 
 # Mount static frontend build if present
 dist_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
