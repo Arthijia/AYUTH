@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getTranslation } from '../i18n/translations';
 import { CheckCircle, AlertTriangle, ShieldAlert, Sparkles, Trash2, Save } from 'lucide-react';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function ClassifierTab({ profile, onSaveProfile, onClearProfile, language }) {
   const t = (key) => getTranslation(key, language);
@@ -36,7 +37,7 @@ export default function ClassifierTab({ profile, onSaveProfile, onClearProfile, 
   const runEvaluation = async (profileData) => {
     setIsEvaluating(true);
     try {
-      const res = await fetch('/api/classify', {
+      const res = await fetch(API_ENDPOINTS.CLASSIFY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile: profileData }),
@@ -44,9 +45,11 @@ export default function ClassifierTab({ profile, onSaveProfile, onClearProfile, 
       if (res.ok) {
         const data = await res.json();
         setEvaluation(data);
+      } else {
+        console.error(`[AYUTH API Error] ${API_ENDPOINTS.CLASSIFY} returned HTTP ${res.status}`);
       }
     } catch (err) {
-      console.warn('Evaluation offline fallback', err);
+      console.warn(`[AYUTH API] Classifier evaluation fallback on ${API_ENDPOINTS.CLASSIFY}:`, err);
     } finally {
       setIsEvaluating(false);
     }

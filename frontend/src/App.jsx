@@ -8,6 +8,7 @@ import KnowledgeTab from './components/KnowledgeTab';
 import SettingsModal from './components/SettingsModal';
 import InfoModal from './components/InfoModal';
 import { getTranslation } from './i18n/translations';
+import API_BASE_URL, { API_ENDPOINTS } from './config/api';
 
 export default function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('ayuth_lang') || 'en');
@@ -87,18 +88,23 @@ export default function App() {
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
+    const payload = {
+      message: text,
+      question: text,
+      history: messages.map((m) => ({ role: m.role, content: m.content })),
+      jurisdiction: 'all',
+      inventionProfile: profile,
+      language: language,
+      apiKey: apiKey || undefined,
+    };
+
+    console.log(`[AYUTH Client] 🚀 POST ${API_ENDPOINTS.CHAT}`, payload);
+
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(API_ENDPOINTS.CHAT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          history: messages.map((m) => ({ role: m.role, content: m.content })),
-          jurisdiction: 'all',
-          inventionProfile: profile,
-          language: language,
-          apiKey: apiKey || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -106,7 +112,13 @@ export default function App() {
         try {
           errJson = await res.json();
         } catch (_) {}
-        console.error(`Backend returned HTTP ${res.status}:`, errJson);
+        console.error(`[AYUTH API Error] HTTP ${res.status} from ${API_ENDPOINTS.CHAT}:`, {
+          url: API_ENDPOINTS.CHAT,
+          method: 'POST',
+          status: res.status,
+          statusText: res.statusText,
+          responseBody: errJson,
+        });
         const localizedError = getTranslation('errorProcessing', language);
         setMessages((prev) => [
           ...prev,
@@ -123,8 +135,10 @@ export default function App() {
       }
 
       const data = await res.json();
+      console.log(`[AYUTH API Success] Response received from ${API_ENDPOINTS.CHAT}:`, data);
+
       if (data.status === "error" || data.success === false) {
-        console.error("Backend error response:", data);
+        console.error("[AYUTH Backend Error]", data);
         const localizedError = data.user_message || data.answer || getTranslation('errorProcessing', language);
         setMessages((prev) => [
           ...prev,
@@ -150,7 +164,12 @@ export default function App() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
-      console.error("Network or fetch error:", err);
+      console.error(`[AYUTH Network Error] Failed connecting to ${API_ENDPOINTS.CHAT}:`, {
+        url: API_ENDPOINTS.CHAT,
+        method: 'POST',
+        message: err.message,
+        stack: err.stack,
+      });
       const networkErrorMsg = getTranslation('errorNetwork', language);
       setMessages((prev) => [
         ...prev,

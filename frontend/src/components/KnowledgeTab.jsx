@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, BookOpen, ChevronDown, ChevronUp, Scale, Globe, Plus, Upload, CheckCircle2, X } from 'lucide-react';
 import { getTranslation } from '../i18n/translations';
+import { API_ENDPOINTS } from '../config/api';
 
 const STOP_WORDS = new Set([
   'i', 'need', 'all', 'the', 'related', 'to', 'for', 'a', 'an', 'and', 'in', 'on', 'is',
@@ -37,14 +38,17 @@ export default function KnowledgeTab({ language }) {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const fetchKnowledgeBase = () => {
-    fetch('/api/documents')
-      .then((res) => res.json())
+    fetch(API_ENDPOINTS.DOCUMENTS)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         setItems(data.records || []);
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Failed to load knowledge base", err);
+        console.error(`[AYUTH API Error] Failed to load ${API_ENDPOINTS.DOCUMENTS}:`, err);
         setLoading(false);
       });
   };
@@ -61,7 +65,7 @@ export default function KnowledgeTab({ language }) {
     }
 
     try {
-      const res = await fetch('/api/documents/upload', {
+      const res = await fetch(API_ENDPOINTS.DOCUMENTS_UPLOAD, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

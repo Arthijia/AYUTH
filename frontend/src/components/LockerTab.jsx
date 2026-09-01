@@ -5,6 +5,7 @@ import {
   Trash2, Play, Eye, X, AlertCircle, Sparkles, FolderArchive
 } from 'lucide-react';
 import { getTranslation } from '../i18n/translations';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function LockerTab({ language }) {
   const t = (key) => getTranslation(key, language);
@@ -22,15 +23,19 @@ export default function LockerTab({ language }) {
 
   // Fetch past locker records
   const fetchInventions = () => {
-    fetch('/api/locker/records')
-      .then((res) => res.json())
+    fetch(API_ENDPOINTS.LOCKER_RECORDS)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => setSavedInventions(data.records || []))
       .catch((err) => {
+        console.warn(`[AYUTH API] Primary locker endpoint ${API_ENDPOINTS.LOCKER_RECORDS} fallback:`, err.message);
         // Fallback to legacy endpoint if needed
-        fetch('/api/inventions')
+        fetch(API_ENDPOINTS.INVENTIONS)
           .then((r) => r.json())
           .then((d) => setSavedInventions(d.records || []))
-          .catch((e) => console.warn("Locker records fetch error", e));
+          .catch((e) => console.warn(`[AYUTH API Error] Fallback ${API_ENDPOINTS.INVENTIONS} error:`, e));
       });
   };
 
@@ -157,12 +162,13 @@ export default function LockerTab({ language }) {
 
         setUploadProgress(40);
 
-        const uploadRes = await fetch('/api/locker/upload', {
+        const uploadRes = await fetch(API_ENDPOINTS.LOCKER_UPLOAD, {
           method: 'POST',
           body: formData,
         });
 
         if (!uploadRes.ok) {
+          console.error(`[AYUTH API Error] Upload to ${API_ENDPOINTS.LOCKER_UPLOAD} failed with HTTP ${uploadRes.status}`);
           throw new Error(`Evidence file upload failed with status ${uploadRes.status}`);
         }
 
@@ -173,7 +179,7 @@ export default function LockerTab({ language }) {
       setUploadProgress(75);
 
       // Step 2: Finalize Locker Record with Master SHA-256 calculation
-      const createRes = await fetch('/api/locker/create', {
+      const createRes = await fetch(API_ENDPOINTS.LOCKER_CREATE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -184,6 +190,7 @@ export default function LockerTab({ language }) {
       });
 
       if (!createRes.ok) {
+        console.error(`[AYUTH API Error] Sealing to ${API_ENDPOINTS.LOCKER_CREATE} failed with HTTP ${createRes.status}`);
         throw new Error(`Master proof generation failed with status ${createRes.status}`);
       }
 
