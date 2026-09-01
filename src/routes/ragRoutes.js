@@ -162,42 +162,40 @@ ragRouter.post('/classify', (req, res) => {
 
 import { knowledgeBase } from '../data/knowledgeSource.js';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
+import {
+  getLockerRecordsFromDb,
+  saveLockerRecordToDb,
+  getCustomDocumentsFromDb,
+  saveCustomDocumentToDb,
+} from '../services/supabaseService.js';
 
 const dynamicDocs = [...knowledgeBase];
-const LOCKER_FILE = path.join(config.dataDir, 'locker_records.json');
-
-function loadLockerRecords() {
-  if (fs.existsSync(LOCKER_FILE)) {
-    try {
-      return JSON.parse(fs.readFileSync(LOCKER_FILE, 'utf-8'));
-    } catch (_) {}
-  }
-  return [];
-}
-
-function saveLockerRecords(records) {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  fs.writeFileSync(LOCKER_FILE, JSON.stringify(records, null, 2), 'utf-8');
-}
 
 /**
  * Knowledge Base Documents Endpoints
  * GET /api/documents & GET /api/kb
  */
-ragRouter.get(['/documents', '/kb'], (req, res) => {
-  res.json({
-    records: dynamicDocs,
-    total: dynamicDocs.length,
-  });
+ragRouter.get(['/documents', '/kb'], async (req, res) => {
+  try {
+    const customDocs = await getCustomDocumentsFromDb();
+    const allDocs = [...customDocs, ...knowledgeBase];
+    res.json({
+      records: allDocs,
+      total: allDocs.length,
+    });
+  } catch (_) {
+    res.json({
+      records: dynamicDocs,
+      total: dynamicDocs.length,
+    });
+  }
 });
 
 /**
  * Add Custom Document to Knowledge Base
  * POST /api/documents/upload
  */
-ragRouter.post('/documents/upload', (req, res) => {
+ragRouter.post('/documents/upload', async (req, res) => {
   try {
     const { title, category, content, citation, jurisdiction } = req.body || {};
     if (!title || !content) {
@@ -211,13 +209,16 @@ ragRouter.post('/documents/upload', (req, res) => {
       answer: content,
       citation: citation || title,
       jurisdiction: Array.isArray(jurisdiction) ? jurisdiction : ['india', 'international'],
+      created_at: new Date().toISOString(),
     };
 
-    dynamicDocs.unshift(newDoc);
+    const savedDoc = await saveCustomDocumentToDb(newDoc);
+    dynamicDocs.unshift(savedDoc);
+
     res.json({
       status: 'success',
       message: 'Document added to knowledge base.',
-      document: newDoc,
+      document: savedDoc,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -228,13 +229,17 @@ ragRouter.post('/documents/upload', (req, res) => {
  * Locker Records Endpoints
  * GET /api/locker/records & GET /api/inventions
  */
-ragRouter.get(['/locker/records', '/inventions'], (req, res) => {
-  const records = loadLockerRecords();
-  res.json({
-    status: 'success',
-    records,
-    total: records.length,
-  });
+ragRouter.get(['/locker/records', '/inventions'], async (req, res) => {
+  try {
+    const records = await getLockerRecordsFromDb();
+    res.json({
+      status: 'success',
+      records,
+      total: records.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**
@@ -254,7 +259,7 @@ ragRouter.post('/locker/upload', (req, res) => {
  * Create Invention Locker Record with Master SHA-256
  * POST /api/locker/create
  */
-ragRouter.post('/locker/create', (req, res) => {
+ragRouter.post('/locker/create', async (req, res) => {
   try {
     const { title, description, files = [], record_id } = req.body || {};
     const recordId = record_id || `AYUTH-LOCK-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -283,15 +288,14 @@ ragRouter.post('/locker/create', (req, res) => {
       total_size_formatted: 'Verified',
       files,
       receipt_text: `================================================================================\nAYUTH INTELLECTUAL PROPERTY LOCKER - PROOF OF CONCEPTION RECEIPT\n================================================================================\nLocker Record ID    : ${recordId}\nInvention Title     : ${title}\nServer Timestamp    : ${timestamp}\nMaster SHA-256 Hash : ${masterSha256}\nTotal Files Locked  : ${files.length}\n================================================================================`,
+      created_at: new Date().toISOString(),
     };
 
-    const existing = loadLockerRecords();
-    existing.unshift(newRecord);
-    saveLockerRecords(existing);
+    const savedRecord = await saveLockerRecordToDb(newRecord);
 
     res.json({
       status: 'success',
-      record: newRecord,
+      record: savedRecord,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
