@@ -1,12 +1,9 @@
 """
 AYUTH Autonomous Cognitive AI Assistant & Semantic RAG Comparison Engine
-Multilingual Intelligence Architecture:
-- Dynamic Language Recognition (No hardcoded language limits)
-- Code-mixed & Transliterated Language Support (e.g. Tanglish, Hinglish)
-- Ambiguous & Short Message Contextual Reasoning
-- Language-Independent Semantic Intent Classification
-- Multi-Turn Session State & Repeated Intent Tracking
-- Evidence-Based Feature Comparison for Any Invention Type
+- Strict Language Decision Hierarchy & Intent Router
+- Greetings & Casual Chat bypass RAG completely (rag_used=False, sources=[])
+- Invention disclosures trigger dynamic feature comparison
+- Canonical Statutory Knowledge retrieval for patent queries
 """
 
 import os
@@ -30,9 +27,10 @@ from services.chroma_service import (
     get_chroma_collection
 )
 from services.language_service import (
-    detect_language_intelligence,
+    determine_language_hierarchy,
     get_or_create_session,
-    update_session_state
+    update_session_state,
+    COMMON_SHORT_GREETINGS_CASUAL
 )
 
 DYNAMIC_KNOWLEDGE_STORE = list(KNOWLEDGE_BASE)
@@ -111,9 +109,9 @@ def call_groq_llm(messages: list, api_key: str = None, temperature: float = 0.2,
 
 def classify_intent_semantic(query: str, history: list = None, lang_info: dict = None) -> str:
     """
-    Language-independent semantic intent classifier.
+    Language-independent semantic intent classifier with misspelling tolerance.
     Categorizes any user message across all languages into:
-    - GREETING
+    - GREETING / CASUAL
     - INVENTION_START_NEEDS_INFO
     - INVENTION_EVALUATION
     - KNOWLEDGE_QUERY
@@ -122,23 +120,27 @@ def classify_intent_semantic(query: str, history: list = None, lang_info: dict =
     q_lower = q_clean.lower()
     history = history or []
 
-    # 1. Greeting Check (multi-script + Latin)
-    is_greeting = False
-    # Short non-Latin / Latin greetings
-    greeting_terms = {
-        "hi", "hello", "hey", "hola", "bonjour", "salut", "hallo", "namaste", "namaskar",
-        "vanakkam", "pranam", "marhaba", "salam", "assalam", "konnichiwa", "ni hao", "ciao", "olá",
-        "annyeong", "annyeonghaseyo"
-    }
-    # Check if query matches single greeting or small phrase
-    words = re.findall(r'\b[\w\u0900-\u0DFF\u0600-\u06FF\u4E00-\u9FFF\uAC00-\uD7AF]+\b', q_lower)
-    if len(words) <= 4:
-        if any(w in greeting_terms for w in words):
-            is_greeting = True
-        elif q_clean in {"வணக்கம்", "नमस्ते", "مرحبا", "سلام", "Bonjour", "Hola", "Hallo", "Ciao", "안녕하세요", "안녕"}:
-            is_greeting = True
+    # 1. Normalize text for greetings/casual chat (matches "helo", "helloo", "hii", "heyy", etc.)
+    q_normalized = re.sub(r'[^\w\s]', '', q_lower).strip()
+    words = q_normalized.split()
 
-    if is_greeting and len(words) <= 4:
+    # Regex matching English / European greeting typos and slang
+    greeting_pattern = (
+        r'^(hi+|he+l+o+|he+y+|hlo|hlw|greetings|howdy|good\s*(morning|afternoon|evening|day)|'
+        r'thanks|thank\s*you|thx|thanx|ok|okay|yes|yeah|yep|no|nope|bye|goodbye|cya|sup|yo|'
+        r'who\s+are\s+you|what\s+can\s+you\s+do)(\s|$)'
+    )
+
+    is_greeting = False
+    if re.match(greeting_pattern, q_normalized):
+        if len(words) <= 5:
+            is_greeting = True
+    elif q_normalized in COMMON_SHORT_GREETINGS_CASUAL and len(words) <= 4:
+        is_greeting = True
+    elif q_clean in {"வணக்கம்", "नमस्ते", "안녕하세요", "안녕", "مرحبا", "سلام", "Bonjour", "Hola", "Hallo", "Ciao"}:
+        is_greeting = True
+
+    if is_greeting:
         return "GREETING"
 
     # 2. Check for invention intent across languages
@@ -146,7 +148,7 @@ def classify_intent_semantic(query: str, history: list = None, lang_info: dict =
         r'\b(i have|i got|i made|we have|we developed|developed a|created a|invented a|naan|oru|mujhe|humne|j\'ai|he desarrollado|طورت|اخترعت|ابتكرت)\s+.*'
         r'(invention|formulation|medicine|drug|product|device|system|process|method|idea|kandupidipu|aavishkar|invención|اختراع|ابتكار)\b|'
         r'\b(can|could|would|will|mudiyuma|kidaikuma|sakta|pouvez-vous|puede|هل يمكن)\s+.*(examine|check|evaluate|review|inspect|verify|analyze|assess|patent|examiner|examinar|فحص|تقييم)\b|'
-        r'\b(patent|patente|brevet|பிரிவு|पेटेंट|براءة)\s+.*(for my|apply|karna|panna|obtenir|solicitar|الحصول)\b'
+        r'\b(patent|patente|brevet|பிரிவு|पेटेंट|बراءة)\s+.*(for my|apply|karna|panna|obtenir|solicitar|الحصول)\b'
     )
     invention_keywords = [
         "invention", "kandupidipu", "kandupudipu", "கண்டுபிடி", "aavishkar", "आविष्कार",
@@ -154,24 +156,25 @@ def classify_intent_semantic(query: str, history: list = None, lang_info: dict =
         "발명", "특허", "새로운 발명", "신약", "개발"
     ]
 
-    detail_indicators = [
-        "curcumin", "turmeric", "neem", "ashwagandha", "tulsi", "piperine", "herbal", "ayurvedic",
-        "wound healing", "extract", "formulation", "synerg", "combination", "ratio", "nanoparticle",
-        "nano-", "emulsion", "hydrogel", "capsule", "tablet", "dosage", "isolated", "compound",
-        "process of preparing", "method of preparing", "mechanism", "in-vitro", "in-vivo",
-        "device", "sensor", "hardware", "pulse", "nadi", "algorithm", "software", "apparatus",
-        "temperature", "pressure", "supercritical", "co2", "distillation",
-        # Multilingual terms
-        "மஞ்சள்", "வேம்பு", "துளசி", "காயத்தை குணப்படுத்தும்", "நானோ", "மருந்து", "கருவி",
-        "हल्दी", "नीम", "तुलसी", "घाव भरने", "अर्क", "दवा", "उपकरण", "प्रक्रिया",
-        "curcuma", "plaie", "dispositif", "curcumina", "herida", "dispositivo", "الكركم", "الجروح", "جهاز",
-        "강황", "커큐민", "님", "상처 치료", "나노", "추출물", "배합", "시너지", "장치", "센서"
+    has_invention_intent = bool(re.search(invention_regex, q_lower)) or any(k in q_lower for k in invention_keywords)
+
+    # Specific technical delivery, ratio, or process markers required for full evaluation
+    specific_technical_markers = [
+        "snedds", "nano-emulsion", "nanoemulsion", "nanoparticle", "liposome", "hydrogel",
+        "supercritical", "co2", "fractionation", "shodhana", "distillation", "photoplethysmography",
+        "ppg", "sensor", "electrode", "piezoelectric", "algorithm", "neural network", "95%", "90%",
+        "ratio", "combination of", "combined with", "combining", "synergistic index", "combination index",
+        # Multilingual markers
+        "நானோ", "விகிதம்", "இணைத்து", "சாற்றை இணைக்கும்", "अनुपात", "संयोजन", "나노", "배합", "결합하여"
     ]
 
-    has_invention_intent = bool(re.search(invention_regex, q_lower)) or any(k in q_lower for k in invention_keywords)
-    has_details = any(detail in q_lower for detail in detail_indicators) or len(q_clean.split()) > 20
+    word_count = len(q_clean.split())
+    has_specific_details = (
+        (any(m in q_lower for m in specific_technical_markers) and (word_count >= 12 or any(k in q_lower for k in ["snedds", "nano", "supercritical", "ppg", "95%", "ratio", "நானோ", "나노"])))
+        or word_count >= 25
+    )
 
-    if has_invention_intent and not has_details:
+    if has_invention_intent and not has_specific_details:
         return "INVENTION_START_NEEDS_INFO"
 
     # 3. Check conversation history continuity
@@ -183,14 +186,14 @@ def classify_intent_semantic(query: str, history: list = None, lang_info: dict =
                 if any(k in prev_content for k in [
                     "describe your invention", "invention details", "what problem it solves",
                     "key ingredients", "components", "technical mechanism", "விவரிக்கவும்",
-                    "विवरण", "détails", "detalles", "تفاصيل"
+                    "विवरण", "détails", "detalles", "تفاصيل", "발명"
                 ]):
                     is_continuing_invention = True
                     break
 
-    if has_details or (is_continuing_invention and len(q_clean.split()) > 3):
+    if has_specific_details or (is_continuing_invention and word_count > 3):
         # Conceptual knowledge questions
-        if q_lower.startswith(("what is", "explain", "define", "what are the rules", "how does tkdl", "what does section", "என்ன", "क्या है", "qu'est-ce", "qué es", "ما هو")):
+        if q_lower.startswith(("what is", "explain", "define", "what are the rules", "how does tkdl", "what does section", "என்ன", "क्या है", "qu'est-ce", "qué es", "ما هو", "무엇")):
             if not any(k in q_lower for k in ["my invention", "our formulation", "we developed", "i developed", "naan", "mujhe", "mon invention"]):
                 return "KNOWLEDGE_QUERY"
         return "INVENTION_EVALUATION"
@@ -240,7 +243,7 @@ def extract_structured_invention_features(invention_text: str, history: list = N
     """
     system_prompt = (
         "You are an expert Multilingual Patent Analyst & Technical Classifier for AYUTH.\n"
-        "Analyze the user's invention description, which may be in any language (English, Tamil, Hindi, French, Spanish, Arabic, Code-Mixed, etc.).\n"
+        "Analyze the user's invention description, which may be in any language.\n"
         "1. Understand the core invention concept regardless of language.\n"
         "2. Formulate 4 to 6 targeted retrieval queries IN ENGLISH for searching the Indian Patents Act and TKDL statutory knowledge base in ChromaDB.\n\n"
         "Return ONLY a valid JSON object matching this schema without markdown code blocks:\n"
@@ -288,7 +291,7 @@ def extract_structured_invention_features(invention_text: str, history: list = N
         except Exception as e:
             print(f"[Multilingual Feature Extraction JSON Parse Warning]: {e}")
 
-    # Robust Fallback Extractor
+    # Fallback
     return {
         "invention_type": "General Invention",
         "title": "User Invention Submission",
@@ -319,9 +322,6 @@ def search_comparison_evidence(extracted_features: dict, user_text: str, limit: 
         ]
 
     print(f"[Comparison Engine] Executing {len(queries)} targeted search facets across ChromaDB...")
-    for idx, q in enumerate(queries):
-        print(f"  Facet {idx+1}: {q}")
-
     matches = search_chroma_multi(queries, limit=limit)
     print(f"[Comparison Engine] Retrieved {len(matches)} relevant comparison evidence documents from ChromaDB.")
     return matches
@@ -337,31 +337,43 @@ def generate_agent_response(
 ) -> dict:
     """
     AYUTH Multilingual & Dynamic Comparison Engine:
-    1. Detects language automatically from user message (Tamil, Hindi, French, Spanish, Arabic, Code-Mixed, English, etc.).
-    2. Maintains session state & tracks consecutive repeated intents.
-    3. Classifies semantic intent language-independently.
-    4. Executes targeted RAG retrieval using canonical statutory mapping.
-    5. Synthesizes grounded assessment and responds naturally in user's detected language.
+    Strict Decision Hierarchy:
+    1. UI Selected Language & Session State
+    2. Fast Intent Router: GREETING & CASUAL CHAT NEVER CALL RAG (rag_used=False, sources=[])
+    3. Multi-turn Repeated Greeting tracking
+    4. RAG called ONLY on Invention Evaluation and Knowledge Queries
     """
     raw_query = query.strip()
     history = history or []
     s_id = session_id or "default_session"
     session = get_or_create_session(s_id)
 
-    # 1. Automatic Universal Language Detection
-    lang_info = detect_language_intelligence(raw_query, history=history, session_state=session)
+    # Normalize incoming selected language from UI dropdown
+    selected_ui_lang = (language or "en").strip()
+    if selected_ui_lang == "auto":
+        selected_ui_lang = "en"
+
+    # Step 1: Determine Language Hierarchy
+    prev_lang = session.get("detected_language")
+    lang_info = determine_language_hierarchy(
+        raw_text=raw_query,
+        selected_language=selected_ui_lang,
+        previous_language=prev_lang,
+        history=history
+    )
+
     detected_lang_name = lang_info.get("language_name", "English")
     detected_lang_code = lang_info.get("detected_language", "en")
     is_code_mixed = lang_info.get("is_code_mixed", False)
 
-    # 2. Language-Independent Semantic Intent Classification
+    # Step 2: Language-Independent Semantic Intent Classification
     intent = classify_intent_semantic(raw_query, history=history, lang_info=lang_info)
 
-    # 3. Update Session State (Tracking repeated intents)
-    session = update_session_state(s_id, lang_info, intent)
+    # Step 3: Update Session State
+    session = update_session_state(s_id, lang_info, intent, selected_lang=selected_ui_lang)
     repeated_count = session.get("repeated_intent_count", 1)
 
-    print(f"\n[AYUTH Multilingual Engine] Query: \"{raw_query[:70]}...\"")
+    print(f"\n[AYUTH Engine] User Query: \"{raw_query[:70]}\" | UI Selected: {selected_ui_lang}")
     print(f"  -> Detected Language: {detected_lang_name} ({detected_lang_code}) | Confidence: {lang_info.get('confidence')}")
     print(f"  -> Semantic Intent: {intent} | Repeated Count: {repeated_count}")
 
@@ -375,24 +387,26 @@ def generate_agent_response(
     lang_instruction = (
         f"=== TARGET RESPONSE LANGUAGE: {detected_lang_name} (Code: {detected_lang_code}) ===\n"
         f"MANDATORY INSTRUCTION: You MUST generate your ENTIRE response fluently, naturally, and professionally in {detected_lang_name}.\n"
+        f"- If the user wrote in English (or selected English for short greetings like 'helo'/'hi'), respond fully in English.\n"
         f"- If the user wrote in Tamil (தமிழ்), respond fully in Tamil.\n"
         f"- If the user wrote in Hindi (हिंदी), respond fully in Hindi.\n"
         f"- If the user wrote in French (Français), respond fully in French.\n"
         f"- If the user wrote in Spanish (Español), respond fully in Spanish.\n"
         f"- If the user wrote in Arabic (العربية), respond fully in Arabic.\n"
         f"- If the user wrote in Korean (한국어), respond fully in Korean.\n"
-        f"- If the user wrote in Code-Mixed text (e.g. Tanglish / Hinglish), respond in the matching conversational code-mixed style or clear native phrasing.\n"
+        f"- If the user wrote in Code-Mixed text (e.g. Tanglish / Hinglish), respond in matching conversational style.\n"
         f"- Translate all headings, tables, labels, and disclaimers into {detected_lang_name} naturally."
     )
 
     # =========================================================================
-    # FLOW 1: GREETING (Repeated Intent Aware & Multilingual)
+    # FLOW 1: GREETING & CASUAL CHAT (NO RAG, rag_used=False, sources=[])
     # =========================================================================
     if intent == "GREETING":
+        print("[AYUTH Engine] Routing to GREETING flow. ChromaDB search is BYPASSED (rag_used=False).")
         if repeated_count > 1:
             greeting_guidance = (
                 f"The user has greeted you multiple consecutive times ({repeated_count} times) or switched greeting language.\n"
-                f"Acknowledge their greeting warmly in {detected_lang_name} and politely ask what specific invention, medicine formula, device, or patent rule they would like to analyze."
+                f"Acknowledge their greeting warmly in {detected_lang_name} and politely invite them to share their specific invention, medicine formula, device, or patent question."
             )
         else:
             greeting_guidance = (
@@ -428,13 +442,18 @@ def generate_agent_response(
 
         return {
             "status": "success",
-            "intent": "greeting",
             "answer": llm_reply,
+            "language": detected_lang_code,
+            "intent": "GREETING",
+            "rag_used": False,
+            "sources": [],
             "proof_documents": [],
             "citations": [],
             "found": True,
             "language_info": {
+                "selected_language": selected_ui_lang,
                 "detected_language": detected_lang_code,
+                "response_language": detected_lang_code,
                 "language_name": detected_lang_name,
                 "confidence": lang_info.get("confidence", 1.0),
                 "is_code_mixed": is_code_mixed,
@@ -447,10 +466,10 @@ def generate_agent_response(
         }
 
     # =========================================================================
-    # FLOW 2: INVENTION ANALYSIS REQUEST (DETAILS MISSING)
-    # Dynamically asks for missing information in the user's detected language.
+    # FLOW 2: INVENTION ANALYSIS REQUEST (DETAILS MISSING) - NO RAG
     # =========================================================================
     if intent == "INVENTION_START_NEEDS_INFO":
+        print("[AYUTH Engine] Routing to INVENTION_START_NEEDS_INFO flow. ChromaDB search is BYPASSED (rag_used=False).")
         system_prompt = f"""{lang_instruction}
 
 You are AYUTH, an AI Intellectual Property and Regulatory Assistant.
@@ -489,13 +508,18 @@ Do NOT use a hardcoded generic template. Generate natural, encouraging clarifica
 
         return {
             "status": "success",
-            "intent": "invention_clarification_request",
             "answer": llm_reply,
+            "language": detected_lang_code,
+            "intent": "INVENTION_START_NEEDS_INFO",
+            "rag_used": False,
+            "sources": [],
             "proof_documents": [],
             "citations": [],
             "found": True,
             "language_info": {
+                "selected_language": selected_ui_lang,
                 "detected_language": detected_lang_code,
+                "response_language": detected_lang_code,
                 "language_name": detected_lang_name,
                 "confidence": lang_info.get("confidence", 1.0),
                 "is_code_mixed": is_code_mixed,
@@ -508,9 +532,10 @@ Do NOT use a hardcoded generic template. Generate natural, encouraging clarifica
         }
 
     # =========================================================================
-    # FLOW 3: INVENTION FEATURE EXTRACTION & COMPARISON ENGINE
+    # FLOW 3: INVENTION FEATURE EXTRACTION & COMPARISON ENGINE (RAG ACTIVE)
     # =========================================================================
     if intent == "INVENTION_EVALUATION":
+        print("[AYUTH Engine] Routing to INVENTION_EVALUATION flow. Triggering ChromaDB multi-facet RAG.")
         extracted = extract_structured_invention_features(full_invention_input, history=history, api_key=api_key)
         retrieved_docs = search_comparison_evidence(extracted, full_invention_input, limit=settings.TOP_K or 6)
 
@@ -621,13 +646,18 @@ You evaluate a USER'S INVENTION (the PRIMARY INPUT) by comparing it against EXIS
         citations = [d.get("citation") for d in retrieved_docs if d.get("citation")]
         return {
             "status": "success",
-            "intent": "invention_patentability_assessment",
             "answer": llm_reply,
+            "language": detected_lang_code,
+            "intent": "INVENTION_EVALUATION",
+            "rag_used": True if len(retrieved_docs) > 0 else False,
+            "sources": retrieved_docs,
             "proof_documents": retrieved_docs,
             "citations": citations,
             "found": True,
             "language_info": {
+                "selected_language": selected_ui_lang,
                 "detected_language": detected_lang_code,
+                "response_language": detected_lang_code,
                 "language_name": detected_lang_name,
                 "confidence": lang_info.get("confidence", 1.0),
                 "is_code_mixed": is_code_mixed,
@@ -642,7 +672,7 @@ You evaluate a USER'S INVENTION (the PRIMARY INPUT) by comparing it against EXIS
     # =========================================================================
     # FLOW 4: KNOWLEDGE QUESTION (GROUNDED RAG SEARCH IN USER LANGUAGE)
     # =========================================================================
-    # For knowledge questions, translate/formulate English query for ChromaDB if non-English
+    print("[AYUTH Engine] Routing to KNOWLEDGE_QUERY flow. Triggering ChromaDB statutory RAG.")
     rag_search_query = raw_query
     if detected_lang_code != "en" and not is_code_mixed:
         translate_messages = [
@@ -668,16 +698,23 @@ You evaluate a USER'S INVENTION (the PRIMARY INPUT) by comparing it against EXIS
             not_found_msg = "No dispongo de suficiente información verificada en la base de conocimientos actual para responder con precisión."
         elif detected_lang_code == "ar":
             not_found_msg = "لا تتوفر لدي معلومات موثقة كافية في قاعدة المعرفة الحالية للإجابة على هذا السؤال بدقة."
+        elif detected_lang_code == "ko":
+            not_found_msg = "현재 지식베이스에 해당 질문에 정확하게 답변할 수 있는 충분한 검증 정보가 없습니다."
 
         return {
             "status": "not_found",
-            "intent": "insufficient_info",
             "answer": not_found_msg,
+            "language": detected_lang_code,
+            "intent": "KNOWLEDGE_QUERY",
+            "rag_used": False,
+            "sources": [],
             "proof_documents": [],
             "citations": [],
             "found": False,
             "language_info": {
+                "selected_language": selected_ui_lang,
                 "detected_language": detected_lang_code,
+                "response_language": detected_lang_code,
                 "language_name": detected_lang_name,
                 "confidence": lang_info.get("confidence", 1.0),
                 "is_code_mixed": is_code_mixed,
@@ -723,13 +760,18 @@ INSTRUCTIONS:
 
     return {
         "status": "success",
-        "intent": "statutory_answer",
         "answer": llm_reply,
+        "language": detected_lang_code,
+        "intent": "KNOWLEDGE_QUERY",
+        "rag_used": True,
+        "sources": knowledge_matches,
         "proof_documents": knowledge_matches,
         "citations": [d.get("citation") for d in knowledge_matches if d.get("citation")],
         "found": True,
         "language_info": {
+            "selected_language": selected_ui_lang,
             "detected_language": detected_lang_code,
+            "response_language": detected_lang_code,
             "language_name": detected_lang_name,
             "confidence": lang_info.get("confidence", 1.0),
             "is_code_mixed": is_code_mixed,

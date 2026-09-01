@@ -109,7 +109,9 @@ export default function App() {
       const assistantMsg = {
         role: 'assistant',
         content: data.answer,
-        proof_documents: data.proof_documents || [],
+        rag_used: Boolean(data.rag_used),
+        sources: data.sources || data.proof_documents || [],
+        proof_documents: data.proof_documents || data.sources || [],
         citations: data.citations || [],
       };
       setMessages((prev) => [...prev, assistantMsg]);

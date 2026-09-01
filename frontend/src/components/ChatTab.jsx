@@ -230,8 +230,8 @@ export default function ChatTab({ messages, onSendMessage, isLoading, language }
                   <FormattedContent content={msg.content} />
                 )}
 
-                {/* Sources & Citations Accordion */}
-                {!isUser && msg.proof_documents && msg.proof_documents.length > 0 && (
+                {/* Sources & Citations Accordion (Only when RAG was actually executed) */}
+                {!isUser && msg.rag_used && msg.proof_documents && msg.proof_documents.length > 0 && (
                   <div className="pt-2 border-t border-slate-100 space-y-1.5">
                     <button
                       type="button"
