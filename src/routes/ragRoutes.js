@@ -157,3 +157,141 @@ ragRouter.post('/classify', (req, res) => {
     });
   }
 });
+
+import { knowledgeBase } from '../data/knowledgeSource.js';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const dynamicDocs = [...knowledgeBase];
+const LOCKER_FILE = path.join(config.dataDir, 'locker_records.json');
+
+function loadLockerRecords() {
+  if (fs.existsSync(LOCKER_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(LOCKER_FILE, 'utf-8'));
+    } catch (_) {}
+  }
+  return [];
+}
+
+function saveLockerRecords(records) {
+  fs.mkdirSync(config.dataDir, { recursive: true });
+  fs.writeFileSync(LOCKER_FILE, JSON.stringify(records, null, 2), 'utf-8');
+}
+
+/**
+ * Knowledge Base Documents Endpoints
+ * GET /api/documents & GET /api/kb
+ */
+ragRouter.get(['/documents', '/kb'], (req, res) => {
+  res.json({
+    records: dynamicDocs,
+    total: dynamicDocs.length,
+  });
+});
+
+/**
+ * Add Custom Document to Knowledge Base
+ * POST /api/documents/upload
+ */
+ragRouter.post('/documents/upload', (req, res) => {
+  try {
+    const { title, category, content, citation, jurisdiction } = req.body || {};
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required.' });
+    }
+
+    const newDoc = {
+      id: `custom-${Date.now()}`,
+      category: category || 'Custom Statutory Reference',
+      question: title,
+      answer: content,
+      citation: citation || title,
+      jurisdiction: Array.isArray(jurisdiction) ? jurisdiction : ['india', 'international'],
+    };
+
+    dynamicDocs.unshift(newDoc);
+    res.json({
+      status: 'success',
+      message: 'Document added to knowledge base.',
+      document: newDoc,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Locker Records Endpoints
+ * GET /api/locker/records & GET /api/inventions
+ */
+ragRouter.get(['/locker/records', '/inventions'], (req, res) => {
+  const records = loadLockerRecords();
+  res.json({
+    status: 'success',
+    records,
+    total: records.length,
+  });
+});
+
+/**
+ * Evidence File Upload Mock / Receiver
+ * POST /api/locker/upload
+ */
+ragRouter.post('/locker/upload', (req, res) => {
+  const recordId = `AYUTH-LOCK-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+  res.json({
+    status: 'success',
+    record_id: recordId,
+    uploaded_files: [],
+  });
+});
+
+/**
+ * Create Invention Locker Record with Master SHA-256
+ * POST /api/locker/create
+ */
+ragRouter.post('/locker/create', (req, res) => {
+  try {
+    const { title, description, files = [], record_id } = req.body || {};
+    const recordId = record_id || `AYUTH-LOCK-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+    const canonicalData = JSON.stringify({
+      recordId,
+      title: (title || '').trim(),
+      description: (description || '').trim(),
+      files,
+      timestamp,
+    });
+
+    const masterSha256 = crypto.createHash('sha256').update(canonicalData).digest('hex');
+
+    const newRecord = {
+      record_id: recordId,
+      title: title || 'Ayurvedic Invention Disclosure',
+      description,
+      master_sha256: masterSha256,
+      timestamp_utc: timestamp,
+      total_files: files.length,
+      documents_count: files.filter(f => f.type === 'document').length,
+      images_count: files.filter(f => f.type === 'image').length,
+      videos_count: files.filter(f => f.type === 'video').length,
+      total_size_formatted: 'Verified',
+      files,
+      receipt_text: `================================================================================\nAYUTH INTELLECTUAL PROPERTY LOCKER - PROOF OF CONCEPTION RECEIPT\n================================================================================\nLocker Record ID    : ${recordId}\nInvention Title     : ${title}\nServer Timestamp    : ${timestamp}\nMaster SHA-256 Hash : ${masterSha256}\nTotal Files Locked  : ${files.length}\n================================================================================`,
+    };
+
+    const existing = loadLockerRecords();
+    existing.unshift(newRecord);
+    saveLockerRecords(existing);
+
+    res.json({
+      status: 'success',
+      record: newRecord,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
