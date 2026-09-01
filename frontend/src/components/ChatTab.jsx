@@ -2,56 +2,150 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, BookOpen, ChevronDown, ChevronUp, Scale, Sparkles } from 'lucide-react';
 import { getTranslation } from '../i18n/translations';
 
+function renderInline(text) {
+  if (!text) return text;
+  // Match bold **text** or __text__
+  const parts = [];
+  let lastIndex = 0;
+  const regex = /\*\*(.*?)\*\*/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    parts.push(<strong key={match.index} className="font-semibold text-slate-900">{match[1]}</strong>);
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
 function FormattedContent({ content }) {
   if (!content) return null;
 
-  const lines = content.split('\n');
+  const rawLines = content.split('\n');
+  const blocks = [];
+  let currentTable = [];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      currentTable.push(trimmed);
+    } else {
+      if (currentTable.length > 0) {
+        blocks.push({ type: 'table', rows: [...currentTable] });
+        currentTable = [];
+      }
+      if (trimmed) {
+        blocks.push({ type: 'line', text: line, trimmed });
+      }
+    }
+  }
+
+  if (currentTable.length > 0) {
+    blocks.push({ type: 'table', rows: [...currentTable] });
+  }
+
   return (
     <div className="space-y-2 text-xs leading-relaxed text-slate-800">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return null;
+      {blocks.map((block, bIdx) => {
+        if (block.type === 'table') {
+          const rows = block.rows;
+          const headerRow = rows[0]
+            ? rows[0].split('|').slice(1, -1).map(c => c.trim())
+            : [];
+          const dataRows = rows.slice(1).filter(r => !r.match(/^\|\s*[-:]+\s*\|/));
+
+          return (
+            <div key={bIdx} className="overflow-x-auto my-2 rounded-lg border border-slate-200/80 shadow-xs">
+              <table className="min-w-full divide-y divide-slate-200 text-[11px]">
+                {headerRow.length > 0 && (
+                  <thead className="bg-slate-100/80 text-slate-900 font-semibold">
+                    <tr>
+                      {headerRow.map((h, hIdx) => (
+                        <th key={hIdx} className="px-2.5 py-1.5 text-left font-semibold">
+                          {renderInline(h)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {dataRows.map((dRow, rIdx) => {
+                    const cells = dRow.split('|').slice(1, -1).map(c => c.trim());
+                    return (
+                      <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}>
+                        {cells.map((cell, cIdx) => (
+                          <td key={cIdx} className="px-2.5 py-1.5 text-slate-700">
+                            {renderInline(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        const { text, trimmed } = block;
 
         if (trimmed.startsWith('### ')) {
           return (
-            <h3 key={idx} className="text-xs font-bold text-ayurveda-dark pt-1.5 pb-0.5 font-cinzel">
-              {trimmed.replace('### ', '')}
+            <h3 key={bIdx} className="text-xs font-bold text-ayurveda-dark pt-1.5 pb-0.5 font-cinzel">
+              {renderInline(trimmed.replace('### ', ''))}
             </h3>
           );
         }
 
         if (trimmed.startsWith('## ')) {
           return (
-            <h2 key={idx} className="text-xs font-bold text-slate-900 pt-2 pb-0.5">
-              {trimmed.replace('## ', '')}
+            <h2 key={bIdx} className="text-xs font-bold text-slate-900 pt-2 pb-0.5 border-b border-slate-100 pb-1">
+              {renderInline(trimmed.replace('## ', ''))}
             </h2>
           );
         }
 
         if (trimmed === '---') {
-          return <hr key={idx} className="border-t border-slate-200/70 my-2" />;
+          return <hr key={bIdx} className="border-t border-slate-200/70 my-2" />;
         }
 
         if (trimmed.startsWith('> ')) {
           return (
-            <blockquote key={idx} className="pl-2.5 py-1 border-l-2 border-ayurveda-primary bg-ayurveda-pale/30 rounded-r-md italic text-[11px] text-slate-700 my-1.5">
-              {trimmed.replace(/^>\s*/, '')}
+            <blockquote key={bIdx} className="pl-2.5 py-1 border-l-2 border-ayurveda-primary bg-ayurveda-pale/30 rounded-r-md italic text-[11px] text-slate-700 my-1.5">
+              {renderInline(trimmed.replace(/^>\s*/, ''))}
             </blockquote>
           );
         }
 
         if (trimmed.startsWith('* ') || trimmed.startsWith('• ') || trimmed.startsWith('- ')) {
           return (
-            <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-700 ml-1">
+            <div key={bIdx} className="flex items-start gap-1.5 text-xs text-slate-700 ml-1">
               <span className="text-ayurveda-primary font-bold text-xs flex-shrink-0">•</span>
-              <span>{trimmed.replace(/^[*•-]\s*/, '')}</span>
+              <span>{renderInline(trimmed.replace(/^[*•-]\s*/, ''))}</span>
+            </div>
+          );
+        }
+
+        const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+        if (numMatch) {
+          return (
+            <div key={bIdx} className="flex items-start gap-1.5 text-xs text-slate-700 ml-1">
+              <span className="text-ayurveda-primary font-semibold text-xs flex-shrink-0">{numMatch[1]}.</span>
+              <span>{renderInline(numMatch[2])}</span>
             </div>
           );
         }
 
         return (
-          <p key={idx} className="text-xs leading-relaxed">
-            {line}
+          <p key={bIdx} className="text-xs leading-relaxed">
+            {renderInline(text)}
           </p>
         );
       })}

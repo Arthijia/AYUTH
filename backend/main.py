@@ -40,6 +40,7 @@ class ChatRequest(BaseModel):
     language: Optional[str] = "en"
     limit: Optional[int] = 4
     apiKey: Optional[str] = None
+    documentText: Optional[str] = None
 
 class DocumentUploadRequest(BaseModel):
     title: str
@@ -93,21 +94,17 @@ async def upload_document(payload: DocumentUploadRequest):
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest):
     query_text = (payload.message or payload.question or "").strip()
-    if not query_text:
+    if not query_text and not payload.documentText:
         raise HTTPException(status_code=400, detail="Missing message or question")
 
     try:
-        matches = search_knowledge_documents(
-            query=query_text,
-            limit=payload.limit or 4,
-        )
         response = generate_agent_response(
-            query=query_text,
-            matches=matches,
+            query=query_text or "Invention Analysis Request from Document",
             history=payload.history,
             invention_profile=payload.inventionProfile,
             language=payload.language or "en",
             api_key=payload.apiKey,
+            document_text=payload.documentText,
         )
         return response
     except Exception as e:

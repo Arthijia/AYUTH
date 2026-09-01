@@ -30,32 +30,30 @@ def get_chroma_collection():
             metadata={"hnsw:space": "cosine"}
         )
 
-        # Populate if empty
-        if _collection.count() == 0:
-            print("[ChromaDB] Initializing statutory knowledge base collection...")
-            ids = []
-            documents = []
-            metadatas = []
+        # Upsert all canonical knowledge base documents
+        ids = []
+        documents = []
+        metadatas = []
 
-            for doc in KNOWLEDGE_BASE:
-                ids.append(doc["id"])
-                # Combine title and answer text for semantic richness
-                content = f"{doc.get('question', '')}\n\n{doc.get('answer', '')}"
-                documents.append(content)
-                metadatas.append({
-                    "category": doc.get("category", ""),
-                    "question": doc.get("question", ""),
-                    "answer": doc.get("answer", ""),
-                    "citation": doc.get("citation", ""),
-                    "jurisdiction": ",".join(doc.get("jurisdiction", ["india", "international"])),
-                })
+        for doc in KNOWLEDGE_BASE:
+            ids.append(doc["id"])
+            content = f"{doc.get('question', '')}\n\n{doc.get('answer', '')}"
+            documents.append(content)
+            metadatas.append({
+                "category": doc.get("category", ""),
+                "question": doc.get("question", ""),
+                "answer": doc.get("answer", ""),
+                "citation": doc.get("citation", ""),
+                "jurisdiction": ",".join(doc.get("jurisdiction", ["india", "international"])),
+            })
 
-            _collection.add(
+        if ids:
+            _collection.upsert(
                 ids=ids,
                 documents=documents,
                 metadatas=metadatas
             )
-            print(f"[ChromaDB] Successfully indexed {len(ids)} statutory records into ChromaDB.")
+            print(f"[ChromaDB] Synchronized {len(ids)} statutory records into ChromaDB collection.")
 
         return _collection
     except Exception as e:
@@ -73,7 +71,7 @@ def search_chroma_documents(query: str, limit: int = 4) -> list:
     try:
         results = collection.query(
             query_texts=[query],
-            n_results=limit
+            n_results=min(limit, collection.count() or limit)
         )
 
         matches = []
@@ -85,15 +83,15 @@ def search_chroma_documents(query: str, limit: int = 4) -> list:
             for i in range(len(ids)):
                 meta = metadatas[i] if i < len(metadatas) else {}
                 dist = distances[i] if i < len(distances) else 1.0
-                # Strict cosine distance threshold for relevant statutory matching
-                if dist < 0.65:
+                # Filter out completely irrelevant vectors (cosine distance < 0.85)
+                if dist < 0.85:
                     matches.append({
                         "id": ids[i],
                         "question": meta.get("question", ""),
                         "answer": meta.get("answer", ""),
                         "category": meta.get("category", ""),
                         "citation": meta.get("citation", ""),
-                        "jurisdiction": meta.get("jurisdiction", "").split(","),
+                        "jurisdiction": [j for j in meta.get("jurisdiction", "").split(",") if j],
                         "similarity": round(1.0 - dist, 3),
                     })
 
@@ -102,6 +100,31 @@ def search_chroma_documents(query: str, limit: int = 4) -> list:
         print(f"[ChromaDB Query Error]: {e}")
         return []
 
+def search_chroma_multi(queries: list, limit: int = 6) -> list:
+    """
+    Searches multiple query facets and deduplicates retrieved documents.
+    """
+    collection = get_chroma_collection()
+    if not collection or not queries:
+        return []
+
+    seen_ids = set()
+    combined_matches = []
+
+    for q in queries:
+        q_str = q.strip()
+        if not q_str:
+            continue
+        matches = search_chroma_documents(q_str, limit=limit)
+        for m in matches:
+            if m["id"] not in seen_ids:
+                seen_ids.add(m["id"])
+                combined_matches.append(m)
+
+    # Sort by similarity descending and cap at limit
+    combined_matches.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+    return combined_matches[:limit]
+
 def add_document_to_chroma(doc: dict):
     collection = get_chroma_collection()
     if not collection:
@@ -109,7 +132,7 @@ def add_document_to_chroma(doc: dict):
 
     doc_id = doc.get("id") or f"doc-{collection.count() + 1}"
     content = f"{doc.get('title') or doc.get('question', '')}\n\n{doc.get('content') or doc.get('answer', '')}"
-    collection.add(
+    collection.upsert(
         ids=[doc_id],
         documents=[content],
         metadatas=[{
@@ -120,3 +143,4 @@ def add_document_to_chroma(doc: dict):
             "jurisdiction": ",".join(doc.get("jurisdiction", ["india", "international"])),
         }]
     )
+
