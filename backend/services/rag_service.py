@@ -1,7 +1,12 @@
 """
 AYUTH Autonomous Cognitive AI Assistant & Semantic RAG Comparison Engine
-Evaluates User Inventions (Formulas, Devices, Processes, Software/Technologies)
-against Existing Knowledge and Evidence.
+Multilingual Intelligence Architecture:
+- Dynamic Language Recognition (No hardcoded language limits)
+- Code-mixed & Transliterated Language Support (e.g. Tanglish, Hinglish)
+- Ambiguous & Short Message Contextual Reasoning
+- Language-Independent Semantic Intent Classification
+- Multi-Turn Session State & Repeated Intent Tracking
+- Evidence-Based Feature Comparison for Any Invention Type
 """
 
 import os
@@ -10,6 +15,7 @@ import site
 import json
 import re
 from datetime import datetime
+from typing import Dict, Any, List, Optional
 
 user_site = site.getusersitepackages()
 if user_site not in sys.path:
@@ -22,6 +28,11 @@ from services.chroma_service import (
     search_chroma_multi,
     add_document_to_chroma,
     get_chroma_collection
+)
+from services.language_service import (
+    detect_language_intelligence,
+    get_or_create_session,
+    update_session_state
 )
 
 DYNAMIC_KNOWLEDGE_STORE = list(KNOWLEDGE_BASE)
@@ -58,7 +69,7 @@ def save_invention_record(record: dict):
 def get_invention_records():
     return INVENTION_RECORDS
 
-def call_groq_llm(messages: list, api_key: str = None, temperature: float = 0.2, max_tokens: int = 1800) -> str:
+def call_groq_llm(messages: list, api_key: str = None, temperature: float = 0.2, max_tokens: int = 1800) -> Optional[str]:
     """
     Executes fast inference via Groq LLM API with fallback models.
     """
@@ -98,183 +109,96 @@ def call_groq_llm(messages: list, api_key: str = None, temperature: float = 0.2,
 
     return None
 
-def classify_intent(query: str, history: list = None) -> str:
+def classify_intent_semantic(query: str, history: list = None, lang_info: dict = None) -> str:
     """
-    Classifies user message into:
+    Language-independent semantic intent classifier.
+    Categorizes any user message across all languages into:
     - GREETING
-    - INVENTION_START_NEEDS_INFO (User wants invention checked/examined but gave no details yet)
-    - INVENTION_EVALUATION (User provided invention details or continuing an analysis)
-    - KNOWLEDGE_QUERY (Statutory / legal / TKDL questions)
+    - INVENTION_START_NEEDS_INFO
+    - INVENTION_EVALUATION
+    - KNOWLEDGE_QUERY
     """
     q_clean = query.strip()
     q_lower = q_clean.lower()
     history = history or []
 
-    # 1. Greeting Check
-    if re.match(r'^(hi|hello|hey|namaste|vanakkam|pranam|greetings|who are you|good morning|good afternoon|good evening)(\s|[!?,.]|$)', q_lower):
-        if len(q_clean.split()) <= 4:
-            return "GREETING"
+    # 1. Greeting Check (multi-script + Latin)
+    is_greeting = False
+    # Short non-Latin / Latin greetings
+    greeting_terms = {
+        "hi", "hello", "hey", "hola", "bonjour", "salut", "hallo", "namaste", "namaskar",
+        "vanakkam", "pranam", "marhaba", "salam", "assalam", "konnichiwa", "ni hao", "ciao", "olá",
+        "annyeong", "annyeonghaseyo"
+    }
+    # Check if query matches single greeting or small phrase
+    words = re.findall(r'\b[\w\u0900-\u0DFF\u0600-\u06FF\u4E00-\u9FFF\uAC00-\uD7AF]+\b', q_lower)
+    if len(words) <= 4:
+        if any(w in greeting_terms for w in words):
+            is_greeting = True
+        elif q_clean in {"வணக்கம்", "नमस्ते", "مرحبا", "سلام", "Bonjour", "Hola", "Hallo", "Ciao", "안녕하세요", "안녕"}:
+            is_greeting = True
 
-    # 2. Check if user is starting an invention inquiry without sufficient details
-    # Matches patterns like:
-    # "i have a/an/new invention", "could/can/would you examine (it/my invention)", "i need/want to get patent for my (new) ...", "is my ... patentable"
-    is_invention_intent = bool(re.search(
-        r'\b(i have|i got|i made|we have|we developed|developed a|created a|invented a)\s+(a\s+|an\s+|new\s+)?(invention|formulation|medicine|drug|product|device|system|process|method|idea)\b|'
-        r'\b(can|could|would|will)\s+you\s+(examine|check|evaluate|review|inspect|verify|analyze|assess)\s+(it|this|my|our)\b|'
-        r'\b(examine|check|evaluate|review|analyze|assess|verify)\s+(my|this|our|the)\s+(invention|idea|formulation|formula|device|system|product|patentability)\b|'
-        r'\b(is|can)\s+(my|our|this)\s+.*\bpatentable\b|'
-        r'\b(i want|i need|how to|help me|want to|need to)\s+(to\s+)?(get\s+a\s+|file\s+a\s+|apply\s+for\s+a\s+)?patent\b|'
-        r'\bpatent\s+(for\s+my|my\s+new|my\s+idea|my\s+invention|my\s+medicine|my\s+formulation)\b',
-        q_lower
-    ))
+    if is_greeting and len(words) <= 4:
+        return "GREETING"
 
-    detail_indicators = [
-        "curcumin", "turmeric", "neem", "ashwagandha", "tulsi", "piperine", "herbal", "ayurvedic formulation",
-        "wound healing", "extract", "formulation", "synerg", "combination of", "combines", "ratio",
-        "nanoparticle", "nano-", "emulsion", "hydrogel", "capsule", "tablet", "dosage", "isolated",
-        "compound", "process of preparing", "method of preparing", "mechanism", "in-vitro", "in-vivo",
-        "composition comprising", "active ingredient", "botanical", "device", "sensor", "hardware",
-        "pulse", "nadi", "algorithm", "software", "system comprising", "apparatus", "step 1", "step 2",
-        "manufacturing", "temperature", "pressure", "circuit", "electrode", "supercritical", "co2", "distillation"
+    # 2. Check for invention intent across languages
+    invention_regex = (
+        r'\b(i have|i got|i made|we have|we developed|developed a|created a|invented a|naan|oru|mujhe|humne|j\'ai|he desarrollado|طورت|اخترعت|ابتكرت)\s+.*'
+        r'(invention|formulation|medicine|drug|product|device|system|process|method|idea|kandupidipu|aavishkar|invención|اختراع|ابتكار)\b|'
+        r'\b(can|could|would|will|mudiyuma|kidaikuma|sakta|pouvez-vous|puede|هل يمكن)\s+.*(examine|check|evaluate|review|inspect|verify|analyze|assess|patent|examiner|examinar|فحص|تقييم)\b|'
+        r'\b(patent|patente|brevet|பிரிவு|पेटेंट|براءة)\s+.*(for my|apply|karna|panna|obtenir|solicitar|الحصول)\b'
+    )
+    invention_keywords = [
+        "invention", "kandupidipu", "kandupudipu", "கண்டுபிடி", "aavishkar", "आविष्कार",
+        "invención", "brevet", "اختراع", "ابتكار", "kandupudichu", "patent", "patente", "पेटेंट",
+        "발명", "특허", "새로운 발명", "신약", "개발"
     ]
 
+    detail_indicators = [
+        "curcumin", "turmeric", "neem", "ashwagandha", "tulsi", "piperine", "herbal", "ayurvedic",
+        "wound healing", "extract", "formulation", "synerg", "combination", "ratio", "nanoparticle",
+        "nano-", "emulsion", "hydrogel", "capsule", "tablet", "dosage", "isolated", "compound",
+        "process of preparing", "method of preparing", "mechanism", "in-vitro", "in-vivo",
+        "device", "sensor", "hardware", "pulse", "nadi", "algorithm", "software", "apparatus",
+        "temperature", "pressure", "supercritical", "co2", "distillation",
+        # Multilingual terms
+        "மஞ்சள்", "வேம்பு", "துளசி", "காயத்தை குணப்படுத்தும்", "நானோ", "மருந்து", "கருவி",
+        "हल्दी", "नीम", "तुलसी", "घाव भरने", "अर्क", "दवा", "उपकरण", "प्रक्रिया",
+        "curcuma", "plaie", "dispositif", "curcumina", "herida", "dispositivo", "الكركم", "الجروح", "جهاز",
+        "강황", "커큐민", "님", "상처 치료", "나노", "추출물", "배합", "시너지", "장치", "센서"
+    ]
+
+    has_invention_intent = bool(re.search(invention_regex, q_lower)) or any(k in q_lower for k in invention_keywords)
     has_details = any(detail in q_lower for detail in detail_indicators) or len(q_clean.split()) > 20
 
-    if is_invention_intent and not has_details:
+    if has_invention_intent and not has_details:
         return "INVENTION_START_NEEDS_INFO"
 
-    # 3. Check if prior history was asking for invention details or if user is providing invention info
+    # 3. Check conversation history continuity
     is_continuing_invention = False
     if history:
         for h in reversed(history[-4:]):
             prev_content = h.get("content", "").lower()
             if h.get("role") == "assistant":
                 if any(k in prev_content for k in [
-                    "describe your invention", "what the invention is", "invention details",
-                    "what problem it solves", "key ingredients", "components", "structure", "technical mechanism"
+                    "describe your invention", "invention details", "what problem it solves",
+                    "key ingredients", "components", "technical mechanism", "விவரிக்கவும்",
+                    "विवरण", "détails", "detalles", "تفاصيل"
                 ]):
                     is_continuing_invention = True
                     break
 
     if has_details or (is_continuing_invention and len(q_clean.split()) > 3):
-        # Check if it's purely a conceptual/knowledge question like "What is Section 3(p)?"
-        if q_lower.startswith(("what is", "explain", "define", "what are the rules", "how does tkdl", "what does section")) and not any(k in q_lower for k in ["my invention", "our formulation", "we developed", "i have developed", "our device", "our system"]):
-            return "KNOWLEDGE_QUERY"
+        # Conceptual knowledge questions
+        if q_lower.startswith(("what is", "explain", "define", "what are the rules", "how does tkdl", "what does section", "என்ன", "क्या है", "qu'est-ce", "qué es", "ما هو")):
+            if not any(k in q_lower for k in ["my invention", "our formulation", "we developed", "i developed", "naan", "mujhe", "mon invention"]):
+                return "KNOWLEDGE_QUERY"
         return "INVENTION_EVALUATION"
 
-    if is_invention_intent:
+    if has_invention_intent:
         return "INVENTION_START_NEEDS_INFO"
 
-    # 4. Default to Knowledge Query
     return "KNOWLEDGE_QUERY"
-
-def extract_structured_invention_features(invention_text: str, history: list = None, api_key: str = None) -> dict:
-    """
-    Dynamically extracts technical features and generates multi-facet retrieval queries
-    for ANY invention type (medicine, device, process, software, material, product).
-    """
-    system_prompt = (
-        "You are an expert Patent Analyst & Technical Classifier for AYUTH.\n"
-        "Analyze the user's invention description (which could be a Medicine formula, Medical device, Manufacturing process, Software/AI system, or other technical invention).\n"
-        "Extract its structured technical features and formulate targeted retrieval queries for ChromaDB prior art / traditional knowledge comparison.\n\n"
-        "Return ONLY a valid JSON object matching this schema without markdown code blocks:\n"
-        "{\n"
-        '  "invention_type": "Medicine/Formulation | Medical Device/Hardware | Manufacturing/Extraction Process | Software/AI Technology | General Invention",\n'
-        '  "title": "Short descriptive title",\n'
-        '  "intended_use_or_problem": "Problem solved or target application",\n'
-        '  "core_components": ["component/ingredient/module 1", "component 2", ...],\n'
-        '  "core_mechanism_or_steps": "How it works, delivery vehicle, or process steps",\n'
-        '  "claimed_novelty": "Specific technical novelty claim or differentiator",\n'
-        '  "has_sufficient_details": true,\n'
-        '  "retrieval_queries": [\n'
-        '    "query for individual component 1 in traditional knowledge or prior art",\n'
-        '    "query for individual component 2 in traditional knowledge or prior art",\n'
-        '    "query for combination of components",\n'
-        '    "query for formulation/mechanism/delivery system or hardware structure",\n'
-        '    "query for applicable statutory rules (Section 3p, Section 3e synergism, Section 3d efficacy, Section 3k CRI, Section 3i diagnostic, Section 6 NBA)"\n'
-        '  ]\n'
-        "}"
-    )
-
-    combined_context = ""
-    if history:
-        for h in history[-3:]:
-            role = h.get("role", "user")
-            content = h.get("content", "").strip()
-            if content:
-                combined_context += f"{role.upper()}: {content}\n"
-    combined_context += f"USER INVENTION DISCLOSURE:\n{invention_text}"
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": combined_context}
-    ]
-
-    llm_json_str = call_groq_llm(messages, api_key=api_key, temperature=0.1, max_tokens=1200)
-    
-    # Try parsing JSON
-    if llm_json_str:
-        try:
-            # Clean possible markdown wrapping or extra thoughts
-            json_match = re.search(r'\{[\s\S]*\}', llm_json_str.strip())
-            if json_match:
-                parsed = json.loads(json_match.group(0))
-                if isinstance(parsed, dict) and "retrieval_queries" in parsed:
-                    return parsed
-        except Exception as e:
-            print(f"[Feature Extraction JSON Parse Warning]: {e}")
-
-    # Heuristic Fallback Extractor
-    q_lower = invention_text.lower()
-    inv_type = "General Invention"
-    if any(k in q_lower for k in ["herb", "formulation", "extract", "turmeric", "neem", "curcumin", "ayurved", "medicine", "dosage", "synerg"]):
-        inv_type = "Medicine/Formulation"
-    elif any(k in q_lower for k in ["device", "sensor", "hardware", "pulse", "nadi", "electrode", "apparatus", "instrument"]):
-        inv_type = "Medical Device/Hardware"
-    elif any(k in q_lower for k in ["process", "method of preparing", "extraction", "supercritical", "shodhana", "distillation", "temperature", "fermentation"]):
-        inv_type = "Manufacturing/Extraction Process"
-    elif any(k in q_lower for k in ["ai", "algorithm", "software", "neural network", "image detection", "computer vision", "model"]):
-        inv_type = "Software/AI Technology"
-
-    # Generate heuristic queries
-    words = [w for w in re.findall(r'\b[a-zA-Z]{3,}\b', q_lower) if w not in {"the", "and", "for", "with", "that", "this", "have", "new", "our", "are", "from"}]
-    queries = [invention_text[:150]]
-    if inv_type == "Medicine/Formulation":
-        queries.extend([
-            "Section 3(p) Traditional Knowledge Digital Library TKDL",
-            "Section 3(e) synergistic polyherbal admixture combination index",
-            "Section 6 Biological Diversity Act NBA Form III approval",
-            "Section 3(d) therapeutic efficacy enhanced botanical extract"
-        ])
-    elif inv_type == "Medical Device/Hardware":
-        queries.extend([
-            "Ayurvedic medical devices diagnostic apparatus Section 3(i)",
-            "Nadi Pariksha pulse sensor hardware transducer",
-            "novel diagnostic apparatus vs medical treatment exclusion"
-        ])
-    elif inv_type == "Manufacturing/Extraction Process":
-        queries.extend([
-            "novel manufacturing extraction process Section 2(1)(j) Section 5",
-            "botanical supercritical fluid extraction Shodhana process patent",
-            "process parameters active phyto-fraction yield"
-        ])
-    elif inv_type == "Software/AI Technology":
-        queries.extend([
-            "Section 3(k) computer related inventions CRI technical effect",
-            "AI algorithm hardware sensor integration diagnostics",
-            "computer program per se vs patentable technical contribution"
-        ])
-
-    return {
-        "invention_type": inv_type,
-        "title": "User Invention Submission",
-        "intended_use_or_problem": "Specified application in invention description",
-        "core_components": words[:6],
-        "core_mechanism_or_steps": "Described mechanism and technical parameters",
-        "claimed_novelty": "Specific formulation / structural advancement",
-        "has_sufficient_details": len(words) >= 4,
-        "retrieval_queries": queries
-    }
 
 def search_knowledge_documents(query: str, limit: int = 4) -> list:
     """
@@ -294,8 +218,7 @@ def search_knowledge_documents(query: str, limit: int = 4) -> list:
     q_lower = exact_query.lower()
     statutory_keywords = {
         "section 3", "3(p)", "3(e)", "3(d)", "3(k)", "3(j)", "3(i)", "tkdl", "nba", "form iii", "pct",
-        "section 39", "biopiracy", "schedule t", "gmp", "trademark", "trade secret", "synergism", "prior art",
-        "medical device", "nadi", "extraction", "ndds", "nanoparticle"
+        "section 39", "biopiracy", "schedule t", "gmp", "trademark", "trade secret", "synergism", "prior art"
     }
 
     if any(k in q_lower for k in statutory_keywords):
@@ -310,17 +233,90 @@ def search_knowledge_documents(query: str, limit: int = 4) -> list:
 
     return []
 
+def extract_structured_invention_features(invention_text: str, history: list = None, api_key: str = None) -> dict:
+    """
+    Multilingual Dynamic Feature Extractor:
+    Parses user invention in ANY language and maps concepts into canonical/English terms for ChromaDB retrieval facets.
+    """
+    system_prompt = (
+        "You are an expert Multilingual Patent Analyst & Technical Classifier for AYUTH.\n"
+        "Analyze the user's invention description, which may be in any language (English, Tamil, Hindi, French, Spanish, Arabic, Code-Mixed, etc.).\n"
+        "1. Understand the core invention concept regardless of language.\n"
+        "2. Formulate 4 to 6 targeted retrieval queries IN ENGLISH for searching the Indian Patents Act and TKDL statutory knowledge base in ChromaDB.\n\n"
+        "Return ONLY a valid JSON object matching this schema without markdown code blocks:\n"
+        "{\n"
+        '  "invention_type": "Medicine/Formulation | Medical Device/Hardware | Manufacturing/Extraction Process | Software/AI Technology | General Invention",\n'
+        '  "title": "Short descriptive title in English",\n'
+        '  "intended_use_or_problem": "Problem solved or target application",\n'
+        '  "core_components": ["component 1", "component 2", ...],\n'
+        '  "core_mechanism_or_steps": "Technical mechanism, delivery vehicle, or process parameters",\n'
+        '  "claimed_novelty": "Specific technical novelty claim or differentiator",\n'
+        '  "has_sufficient_details": true,\n'
+        '  "retrieval_queries": [\n'
+        '    "query in English for individual active constituent or component 1",\n'
+        '    "query in English for individual constituent 2 or structure",\n'
+        '    "query in English for component combination and intended therapeutic/technical effect",\n'
+        '    "query in English for delivery matrix or process parameters",\n'
+        '    "query in English for applicable statutory sections (Section 3p, Section 3e synergism, Section 3d, Section 3i, Section 3k, Section 6 NBA)"\n'
+        '  ]\n'
+        "}"
+    )
+
+    combined_context = ""
+    if history:
+        for h in history[-3:]:
+            role = h.get("role", "user")
+            content = h.get("content", "").strip()
+            if content:
+                combined_context += f"{role.upper()}: {content}\n"
+    combined_context += f"USER INVENTION DISCLOSURE:\n{invention_text}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": combined_context}
+    ]
+
+    llm_json_str = call_groq_llm(messages, api_key=api_key, temperature=0.1, max_tokens=1200)
+
+    if llm_json_str:
+        try:
+            json_match = re.search(r'\{[\s\S]*\}', llm_json_str.strip())
+            if json_match:
+                parsed = json.loads(json_match.group(0))
+                if isinstance(parsed, dict) and "retrieval_queries" in parsed:
+                    return parsed
+        except Exception as e:
+            print(f"[Multilingual Feature Extraction JSON Parse Warning]: {e}")
+
+    # Robust Fallback Extractor
+    return {
+        "invention_type": "General Invention",
+        "title": "User Invention Submission",
+        "intended_use_or_problem": "Specified application in user description",
+        "core_components": ["Active components / technology disclosed by user"],
+        "core_mechanism_or_steps": "Described mechanism and technical parameters",
+        "claimed_novelty": "Novel formulation / structural advancement",
+        "has_sufficient_details": True,
+        "retrieval_queries": [
+            "Section 3(p) Traditional Knowledge Digital Library TKDL",
+            "Section 3(e) synergistic polyherbal admixture combination index",
+            "Section 6 Biological Diversity Act NBA Form III approval",
+            "Section 3(d) therapeutic efficacy enhanced botanical extract",
+            "Ayurvedic patent eligibility examination guidelines 2012"
+        ]
+    }
+
 def search_comparison_evidence(extracted_features: dict, user_text: str, limit: int = 6) -> list:
     """
     Executes targeted multi-facet queries against ChromaDB for feature-by-feature comparison.
     """
     queries = extracted_features.get("retrieval_queries", [])
     if not queries:
-        queries = [user_text]
-
-    # Ensure the exact user text is included in retrieval facets
-    if user_text not in queries:
-        queries.insert(0, user_text)
+        queries = [
+            "Section 3(p) Traditional Knowledge TKDL",
+            "Section 3(e) synergistic admixture",
+            "Section 6 Biological Diversity Act Form III"
+        ]
 
     print(f"[Comparison Engine] Executing {len(queries)} targeted search facets across ChromaDB...")
     for idx, q in enumerate(queries):
@@ -336,19 +332,38 @@ def generate_agent_response(
     invention_profile: dict = None,
     language: str = "en",
     api_key: str = None,
-    document_text: str = None
+    document_text: str = None,
+    session_id: str = None
 ) -> dict:
     """
-    AYUTH Invention Comparison & Autonomous RAG Engine:
-    - Evaluates user's invention against existing knowledge evidence
-    - Extracts structured invention features for ANY invention category
-    - Decomposes invention into targeted multi-facet queries
-    - Compares user features vs. retrieved evidence
-    - Identifies known features, partial similarities, and potential novel aspects
-    - Generates 10-Part Preliminary Patentability Assessment with Comparison Table
+    AYUTH Multilingual & Dynamic Comparison Engine:
+    1. Detects language automatically from user message (Tamil, Hindi, French, Spanish, Arabic, Code-Mixed, English, etc.).
+    2. Maintains session state & tracks consecutive repeated intents.
+    3. Classifies semantic intent language-independently.
+    4. Executes targeted RAG retrieval using canonical statutory mapping.
+    5. Synthesizes grounded assessment and responds naturally in user's detected language.
     """
     raw_query = query.strip()
     history = history or []
+    s_id = session_id or "default_session"
+    session = get_or_create_session(s_id)
+
+    # 1. Automatic Universal Language Detection
+    lang_info = detect_language_intelligence(raw_query, history=history, session_state=session)
+    detected_lang_name = lang_info.get("language_name", "English")
+    detected_lang_code = lang_info.get("detected_language", "en")
+    is_code_mixed = lang_info.get("is_code_mixed", False)
+
+    # 2. Language-Independent Semantic Intent Classification
+    intent = classify_intent_semantic(raw_query, history=history, lang_info=lang_info)
+
+    # 3. Update Session State (Tracking repeated intents)
+    session = update_session_state(s_id, lang_info, intent)
+    repeated_count = session.get("repeated_intent_count", 1)
+
+    print(f"\n[AYUTH Multilingual Engine] Query: \"{raw_query[:70]}...\"")
+    print(f"  -> Detected Language: {detected_lang_name} ({detected_lang_code}) | Confidence: {lang_info.get('confidence')}")
+    print(f"  -> Semantic Intent: {intent} | Repeated Count: {repeated_count}")
 
     # Merge document text if supplied
     if document_text and document_text.strip():
@@ -356,34 +371,61 @@ def generate_agent_response(
     else:
         full_invention_input = raw_query
 
-    intent = classify_intent(raw_query, history=history)
-    print(f"\n[AYUTH Engine] User Query: \"{raw_query[:80]}...\" | Detected Intent: {intent}")
+    # Language Instruction snippet for LLM prompts
+    lang_instruction = (
+        f"=== TARGET RESPONSE LANGUAGE: {detected_lang_name} (Code: {detected_lang_code}) ===\n"
+        f"MANDATORY INSTRUCTION: You MUST generate your ENTIRE response fluently, naturally, and professionally in {detected_lang_name}.\n"
+        f"- If the user wrote in Tamil (தமிழ்), respond fully in Tamil.\n"
+        f"- If the user wrote in Hindi (हिंदी), respond fully in Hindi.\n"
+        f"- If the user wrote in French (Français), respond fully in French.\n"
+        f"- If the user wrote in Spanish (Español), respond fully in Spanish.\n"
+        f"- If the user wrote in Arabic (العربية), respond fully in Arabic.\n"
+        f"- If the user wrote in Korean (한국어), respond fully in Korean.\n"
+        f"- If the user wrote in Code-Mixed text (e.g. Tanglish / Hinglish), respond in the matching conversational code-mixed style or clear native phrasing.\n"
+        f"- Translate all headings, tables, labels, and disclaimers into {detected_lang_name} naturally."
+    )
 
     # =========================================================================
-    # FLOW 1: GREETING
+    # FLOW 1: GREETING (Repeated Intent Aware & Multilingual)
     # =========================================================================
     if intent == "GREETING":
+        if repeated_count > 1:
+            greeting_guidance = (
+                f"The user has greeted you multiple consecutive times ({repeated_count} times) or switched greeting language.\n"
+                f"Acknowledge their greeting warmly in {detected_lang_name} and politely ask what specific invention, medicine formula, device, or patent rule they would like to analyze."
+            )
+        else:
+            greeting_guidance = (
+                f"Provide a warm, concise, professional greeting in {detected_lang_name}.\n"
+                f"Introduce yourself as AYUTH, the AI Intellectual Property and Regulatory Assistant for Ayurveda, Traditional Knowledge, and Patent Regulations.\n"
+                f"Invite them to share their invention (medicine, device, process, software) for a preliminary patentability evaluation or ask any statutory patent question."
+            )
+
         llm_messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are AYUTH, an AI-powered Intellectual Property and Regulatory Assistant specializing in "
-                    "Ayurveda, Traditional Knowledge (TKDL), and Patent Regulations (Patents Act 1970, Biological Diversity Act 2002).\n"
-                    "Provide a warm, concise, professional greeting. Explain that you can evaluate any invention (medicine formulas, medical devices, "
-                    "manufacturing processes, AI/software technologies) by comparing its features against existing knowledge base evidence, or answer statutory patent questions."
-                )
+                "content": f"{lang_instruction}\n\n{greeting_guidance}"
             },
             {"role": "user", "content": raw_query}
         ]
-        llm_reply = call_groq_llm(llm_messages, api_key=api_key, max_tokens=300)
+        llm_reply = call_groq_llm(llm_messages, api_key=api_key, max_tokens=400)
+        
         if not llm_reply:
-            llm_reply = (
-                "Hello! I am **AYUTH**, your AI-powered Intellectual Property and Regulatory Assistant specializing in "
-                "Ayurveda, Traditional Knowledge (TKDL), and Patent Regulations.\n\n"
-                "I can evaluate your invention (medicine formula, medical device, manufacturing process, or software technology) "
-                "by comparing its features against existing statutory and traditional knowledge evidence, or answer your patent questions.\n\n"
-                "How can I assist you with your invention today?"
-            )
+            if detected_lang_code == "ta":
+                llm_reply = "வணக்கம்! நான் **AYUTH**, ஆயுர்வேத அறிவுசார் சொத்துரிமை மற்றும் காப்புரிமை உதவிக்கான AI உதவியாளர். உங்கள் கண்டுபிடிப்பு அல்லது காப்புரிமை விதிகள் பற்றி எவ்வாறு உதவ முடியும்?"
+            elif detected_lang_code == "hi":
+                llm_reply = "नमस्ते! मैं **AYUTH** हूँ, आयुर्वेद बौद्धिक संपदा और पेटेंट नियमों के लिए आपका AI सहायक। मैं आपकी क्या सहायता कर सकता हूँ?"
+            elif detected_lang_code == "fr":
+                llm_reply = "Bonjour ! Je suis **AYUTH**, votre assistant IA spécialisé en propriété intellectuelle ayurvédique et réglementations des brevets. Comment puis-je vous aider aujourd'hui ?"
+            elif detected_lang_code == "es":
+                llm_reply = "¡Hola! Soy **AYUTH**, su asistente de IA especializado en propiedad intelectual ayurvédica y normativa de patentes. ¿Cómo puedo ayudarle hoy?"
+            elif detected_lang_code == "ar":
+                llm_reply = "مرحبًا! أنا **AYUTH**، مساعدك الذكي المتخصص في الملكية الفكرية للأيورفيدا وقوانين براءات الاختراع. كيف يمكنني مساعدتك اليوم؟"
+            elif detected_lang_code == "ko":
+                llm_reply = "안녕하세요! 저는 아유르베다 지식재산권 및 특허 규제 AI 어시스턴트인 **AYUTH**입니다. 귀하의 발명이나 특허 규정에 대해 무엇을 도와드릴까요?"
+            else:
+                llm_reply = "Hello! I am **AYUTH**, your AI-powered Intellectual Property and Regulatory Assistant for Ayurveda, Traditional Knowledge, and Patent Regulations. How can I help you today?"
+
         return {
             "status": "success",
             "intent": "greeting",
@@ -391,27 +433,40 @@ def generate_agent_response(
             "proof_documents": [],
             "citations": [],
             "found": True,
+            "language_info": {
+                "detected_language": detected_lang_code,
+                "language_name": detected_lang_name,
+                "confidence": lang_info.get("confidence", 1.0),
+                "is_code_mixed": is_code_mixed,
+            },
+            "session_state": {
+                "session_id": s_id,
+                "current_intent": session["current_intent"],
+                "repeated_intent_count": session["repeated_intent_count"]
+            }
         }
 
     # =========================================================================
     # FLOW 2: INVENTION ANALYSIS REQUEST (DETAILS MISSING)
-    # Dynamically identifies missing information without premature Chroma search.
+    # Dynamically asks for missing information in the user's detected language.
     # =========================================================================
     if intent == "INVENTION_START_NEEDS_INFO":
-        system_prompt = (
-            "You are AYUTH, an AI Intellectual Property and Regulatory Assistant for Ayurveda and Traditional Knowledge.\n"
-            "The user wants you to evaluate their invention for patentability, but has not yet provided the specific technical details.\n"
-            "Respond warmly and professionally. Acknowledge that AYUTH evaluates medicine formulas, medical devices, extraction/manufacturing processes, "
-            "and software technologies by comparing them feature-by-feature against existing knowledge and statutory standards.\n\n"
-            "Dynamically ask the user to describe their invention, specifically asking for:\n"
-            "1. What the invention is and the specific problem it solves\n"
-            "2. Type of invention (Medicine formula, Device/hardware, Manufacturing process, Software/AI, or Product)\n"
-            "3. Key components, active ingredients, structural elements, process steps, or algorithmic approach\n"
-            "4. How it works or technical mechanism / delivery method\n"
-            "5. What makes it different or novel from existing traditional knowledge or commercial solutions\n"
-            "6. Supporting experimental data (e.g. synergistic index, in-vitro data, test results) or documents if available\n\n"
-            "Do not use a rigid robotic template. Generate encouraging, natural clarification questions tailored to the user's prompt."
-        )
+        system_prompt = f"""{lang_instruction}
+
+You are AYUTH, an AI Intellectual Property and Regulatory Assistant.
+The user wants you to evaluate an invention for patentability, but has not yet provided the specific technical details.
+
+Respond warmly in {detected_lang_name}. Acknowledge that you evaluate medicine formulas, medical devices, manufacturing/extraction processes, and software technologies by comparing them against existing knowledge and statutory patent standards.
+
+Dynamically ask the user to provide:
+1. What the invention is and the specific problem it solves
+2. Invention category (Medicine formula, Medical device, Manufacturing process, Software/AI, or Product)
+3. Key ingredients, components, structural elements, process steps, or algorithmic approach
+4. How it works or technical mechanism / delivery method
+5. What makes it novel or different from classical Ayurvedic texts and commercial products
+6. Experimental or synergy data / test results (if available)
+
+Do NOT use a hardcoded generic template. Generate natural, encouraging clarification questions in {detected_lang_name}."""
 
         llm_messages = [{"role": "system", "content": system_prompt}]
         for h in history[-4:]:
@@ -421,18 +476,16 @@ def generate_agent_response(
                 llm_messages.append({"role": role, "content": content})
         llm_messages.append({"role": "user", "content": raw_query})
 
-        llm_reply = call_groq_llm(llm_messages, api_key=api_key, max_tokens=600)
+        llm_reply = call_groq_llm(llm_messages, api_key=api_key, max_tokens=700)
         if not llm_reply:
-            llm_reply = (
-                "I would be glad to evaluate your invention and perform a preliminary patentability comparison against existing knowledge base records!\n\n"
-                "To evaluate your invention (whether it is an Ayurvedic medicine formula, medical device, manufacturing process, or software technology), please share:\n"
-                "• **What the invention is & the problem it solves**\n"
-                "• **Key ingredients, components, steps, or technologies**\n"
-                "• **How it works / technical mechanism**\n"
-                "• **What makes it novel or different** from existing classical texts or products\n"
-                "• **Experimental or synergy data / test results** (if available)\n\n"
-                "Once you provide these details, I will extract its key features and compare them against TKDL records and statutory patent rules."
-            )
+            if detected_lang_code == "ta":
+                llm_reply = "உங்கள் கண்டுபிடிப்பை ஆய்வு செய்து காப்புரிமை மதிப்பீட்டை வழங்க தயாராக உள்ளேன்!\n\nதயவுசெய்து பின்வரும் விவரங்களைப் பகிரவும்:\n• கண்டுபிடிப்பின் நோக்கம் மற்றும் தீர்க்கும் பிரச்சனை\n• பயன்படுத்தப்படும் முக்கிய மூலிகைகள், பொருட்கள் அல்லது தொழில்நுட்பம்\n• இது எவ்வாறு செயல்படுகிறது (தொழில்நுட்ப வழிமுறை)\n• பாரம்பரிய நூல்களிலிருந்து இது எவ்வாறு வேறுபடுகிறது"
+            elif detected_lang_code == "hi":
+                llm_reply = "मैं आपके आविष्कार का मूल्यांकन करने के लिए तैयार हूँ!\n\nकृपया निम्नलिखित विवरण साझा करें:\n• आविष्कार का उद्देश्य और समाधान\n• मुख्य सामग्री, घटक या तकनीक\n• यह कैसे काम करता है (तकनीकी तंत्र)\n• पारंपरिक ज्ञान से यह कैसे अलग और नया है"
+            elif detected_lang_code == "ko":
+                llm_reply = "귀하의 발명을 검토하여 예비 특허성 평가를 제공할 준비가 되어 있습니다!\n\n다음 세부 정보를 알려주세요:\n• 발명의 명칭 및 해결하려는 구체적인 과제\n• 주요 성분, 부품 또는 공정 단계\n• 기술적 작동 메커니즘 또는 약물 전달 방식\n• 기존 전통 지식 및 시판 제품과의 차별점 및 신규성"
+            else:
+                llm_reply = "I would be glad to evaluate your invention and perform a preliminary patentability comparison against existing knowledge base records!\n\nPlease share:\n• What the invention is & the problem it solves\n• Key ingredients, components, or steps\n• How it works / technical mechanism\n• What makes it novel or different from classical texts"
 
         return {
             "status": "success",
@@ -441,18 +494,24 @@ def generate_agent_response(
             "proof_documents": [],
             "citations": [],
             "found": True,
+            "language_info": {
+                "detected_language": detected_lang_code,
+                "language_name": detected_lang_name,
+                "confidence": lang_info.get("confidence", 1.0),
+                "is_code_mixed": is_code_mixed,
+            },
+            "session_state": {
+                "session_id": s_id,
+                "current_intent": session["current_intent"],
+                "repeated_intent_count": session["repeated_intent_count"]
+            }
         }
 
     # =========================================================================
     # FLOW 3: INVENTION FEATURE EXTRACTION & COMPARISON ENGINE
-    # The user's invention is the PRIMARY INPUT; the knowledge base is COMPARISON EVIDENCE.
     # =========================================================================
     if intent == "INVENTION_EVALUATION":
-        # 1. Dynamically extract structured features
         extracted = extract_structured_invention_features(full_invention_input, history=history, api_key=api_key)
-        print(f"[AYUTH Engine] Extracted Invention Type: {extracted.get('invention_type')} | Title: {extracted.get('title')}")
-
-        # 2. Retrieve multi-facet comparison evidence from ChromaDB
         retrieved_docs = search_comparison_evidence(extracted, full_invention_input, limit=settings.TOP_K or 6)
 
         evidence_str = ""
@@ -464,7 +523,6 @@ def generate_agent_response(
         else:
             evidence_str = "No directly matching comparison documents found in the current searched knowledge base."
 
-        # Format extracted features summary for prompt
         features_summary = (
             f"- **Invention Type**: {extracted.get('invention_type', 'General')}\n"
             f"- **Title/Concept**: {extracted.get('title', 'User Submission')}\n"
@@ -474,7 +532,9 @@ def generate_agent_response(
             f"- **Claimed Novelty**: {extracted.get('claimed_novelty', 'N/A')}"
         )
 
-        system_prompt = f"""You are AYUTH, an AI Intellectual Property and Regulatory Comparison Engine specializing in Ayurvedic IP, Traditional Knowledge (TKDL), and Patent Regulations (Patents Act 1970, Biological Diversity Act 2002, WIPO PCT).
+        system_prompt = f"""{lang_instruction}
+
+You are AYUTH, an AI Intellectual Property and Regulatory Comparison Engine.
 
 YOUR ROLE:
 You evaluate a USER'S INVENTION (the PRIMARY INPUT) by comparing it against EXISTING KNOWLEDGE AND STATUTORY EVIDENCE (the COMPARISON EVIDENCE).
@@ -486,59 +546,29 @@ You evaluate a USER'S INVENTION (the PRIMARY INPUT) by comparing it against EXIS
 {evidence_str}
 
 === CRITICAL EVALUATION RULES ===
-1. The user's invention is the primary input. Do NOT treat it as a question to the knowledge base.
-2. Compare the USER'S INVENTION FEATURES vs. FEATURES FOUND IN RETRIEVED EVIDENCE.
-3. Identify:
+1. The user's invention is the primary input. Compare the USER'S INVENTION FEATURES vs. FEATURES FOUND IN RETRIEVED EVIDENCE.
+2. Identify:
    - Features already known in the retrieved evidence / classical references.
    - Features partially similar.
    - Features not found in the currently searched knowledge base.
    - Possible novel combinations or technical contributions.
    - Traditional knowledge conflicts (Section 3(p)) or prior art conflicts.
    - Missing experimental or comparative data.
-4. IMPORTANT: Absence of a document in ChromaDB does NOT prove absolute universal novelty. Always state:
-   "Not found in the currently searched knowledge base" rather than "This is definitely novel."
-5. Tailor the legal and statutory analysis to the specific invention type:
-   - For Medicine Formulas: Analyze Section 3(p) traditional knowledge, Section 3(e) synergistic admixture (CI < 0.8), Section 3(d) therapeutic efficacy, Section 6 NBA Form III approval, Schedule T GMP.
-   - For Medical Devices/Hardware: Analyze Section 3(i) diagnostic treatment method exclusion vs patentable physical apparatus/sensor hardware.
-   - For Manufacturing/Extraction Processes: Analyze Section 2(1)(j) process claims, non-obvious parameter limits, solvent yields, Shodhana standardization.
-   - For Software/AI Technology: Analyze Section 3(k) CRI guidelines, technical contribution/effect, sensor-hardware integration.
-
-=== MANDATORY 10-SECTION RESPONSE STRUCTURE ===
-You MUST structure your response using the following 10 numbered Markdown sections:
-
-## 1. Invention Summary
-Summarize the user's invention, categorized invention type, and claimed objective.
-
-## 2. Extracted Key Features
-Bulleted list of technical components, ingredients, steps, mechanisms, or parameters.
-
-## 3. Similar Existing Knowledge
-Summary of relevant prior art, traditional formulations, or statutory precedents found in the retrieved evidence.
-
-## 4. Feature-by-Feature Comparison
-Provide a Markdown comparison table comparing each user feature against the retrieved evidence:
-| User Invention Feature | Existing Evidence in Knowledge Base | Comparison Status | Novelty & Risk Impact |
-
-## 5. Potential Novel Features
-Identify specific aspects that appear technically differentiated (with the explicit note: *"Not found in the currently searched knowledge base"*).
-
-## 6. Prior Art Risks
-Analyze technical overlap, novelty destruction risks, or obviousness concerns based on existing knowledge.
-
-## 7. Traditional Knowledge / Statutory Exclusions
-Examine relevant statutory bars (Section 3(p), Section 3(e), Section 3(d), Section 3(i), Section 3(k), Section 6 NBA Form III) applicable to this invention type.
-
-## 8. Patentability Considerations
-Evaluate Novelty (Section 2(1)(j)), Inventive Step (Section 2(1)(ja)), and Industrial Applicability (Section 2(1)(ac)).
-
-## 9. Evidence and Sources
-List the specific citations and retrieved ChromaDB documents referenced in this comparison.
-
-## 10. Recommended Next Steps
-Provide concrete actionable advice (e.g. quantitative synergy assays, global prior art search, NBA Form III filing, provisional patent application, trade secret strategy).
-
----
-> **Disclaimer**: This is a preliminary AI-assisted patentability assessment for research and informational purposes only and does not constitute a formal legal opinion or replace advice from a registered Patent Agent or Attorney. AYUTH does not grant or approve patents."""
+3. IMPORTANT: Absence of a document in ChromaDB does NOT prove absolute universal novelty. Always state:
+   "Not found in the currently searched knowledge base" (in {detected_lang_name}) rather than asserting definite novelty.
+4. Structure your response using the 10 numbered Markdown sections translated into {detected_lang_name}:
+   1. Invention Summary
+   2. Extracted Key Features
+   3. Similar Existing Knowledge
+   4. Feature-by-Feature Comparison (Must include a Markdown Table)
+   5. Potential Novel Features
+   6. Prior Art Risks
+   7. Traditional Knowledge / Statutory Exclusions (Section 3(p), 3(e), 3(d), 3(i), 3(k), NBA Form III)
+   8. Patentability Considerations
+   9. Evidence and Sources
+   10. Recommended Next Steps
+5. End with the mandatory legal disclaimer in {detected_lang_name}:
+   > **Disclaimer**: This is a preliminary AI-assisted patentability assessment for research and informational purposes only and does not constitute a formal legal opinion or grant/approval of a patent."""
 
         llm_messages = [{"role": "system", "content": system_prompt}]
         for h in history[-6:]:
@@ -550,7 +580,6 @@ Provide concrete actionable advice (e.g. quantitative synergy assays, global pri
 
         llm_reply = call_groq_llm(llm_messages, api_key=api_key, max_tokens=2200)
 
-        # Fallback comparison generator if LLM call is unavailable
         if not llm_reply:
             citations_list = [d.get("citation") for d in retrieved_docs if d.get("citation")]
             llm_reply = (
@@ -587,7 +616,7 @@ Provide concrete actionable advice (e.g. quantitative synergy assays, global pri
             )
 
         if "disclaimer" not in llm_reply.lower() and "legal opinion" not in llm_reply.lower():
-            llm_reply += "\n\n---\n> **Disclaimer**: This is a preliminary AI-assisted patentability assessment for research and informational purposes only and does not constitute a formal legal opinion or replace advice from a registered Patent Agent or Attorney. AYUTH does not grant or approve patents."
+            llm_reply += f"\n\n---\n> **Disclaimer**: This is a preliminary AI-assisted patentability assessment for research and informational purposes only and does not constitute a formal legal opinion or replace advice from a registered Patent Agent or Attorney. AYUTH does not grant or approve patents."
 
         citations = [d.get("citation") for d in retrieved_docs if d.get("citation")]
         return {
@@ -597,22 +626,67 @@ Provide concrete actionable advice (e.g. quantitative synergy assays, global pri
             "proof_documents": retrieved_docs,
             "citations": citations,
             "found": True,
+            "language_info": {
+                "detected_language": detected_lang_code,
+                "language_name": detected_lang_name,
+                "confidence": lang_info.get("confidence", 1.0),
+                "is_code_mixed": is_code_mixed,
+            },
+            "session_state": {
+                "session_id": s_id,
+                "current_intent": session["current_intent"],
+                "repeated_intent_count": session["repeated_intent_count"]
+            }
         }
 
     # =========================================================================
-    # FLOW 4: KNOWLEDGE QUESTION (GROUNDED RAG SEARCH)
+    # FLOW 4: KNOWLEDGE QUESTION (GROUNDED RAG SEARCH IN USER LANGUAGE)
     # =========================================================================
-    knowledge_matches = search_knowledge_documents(raw_query, limit=settings.TOP_K or 4)
+    # For knowledge questions, translate/formulate English query for ChromaDB if non-English
+    rag_search_query = raw_query
+    if detected_lang_code != "en" and not is_code_mixed:
+        translate_messages = [
+            {"role": "system", "content": "Extract the statutory patent concept or legal question in English (e.g. 'What is Section 3(p)?', 'When is NBA Form III required?'). Output ONLY the English query."},
+            {"role": "user", "content": raw_query}
+        ]
+        translated = call_groq_llm(translate_messages, api_key=api_key, max_tokens=100)
+        if translated and len(translated.strip()) > 3:
+            rag_search_query = translated.strip()
+
+    knowledge_matches = search_knowledge_documents(rag_search_query, limit=settings.TOP_K or 4)
     has_matches = knowledge_matches and len(knowledge_matches) > 0
 
     if not has_matches:
+        not_found_msg = f"I don't have enough relevant information in the current knowledge base to answer this accurately."
+        if detected_lang_code == "ta":
+            not_found_msg = "தற்போதைய அறிவுத் தளத்தில் இதற்கு துல்லியமாக பதிலளிக்க போதுமான சரிபார்க்கப்பட்ட தகவல்கள் இல்லை."
+        elif detected_lang_code == "hi":
+            not_found_msg = "वर्तमान ज्ञानकोष में इसका सटीक उत्तर देने के लिए पर्याप्त सत्यापित जानकारी उपलब्ध नहीं है।"
+        elif detected_lang_code == "fr":
+            not_found_msg = "Je ne dispose pas de suffisamment d'informations vérifiées dans la base de connaissances actuelle pour répondre précisément."
+        elif detected_lang_code == "es":
+            not_found_msg = "No dispongo de suficiente información verificada en la base de conocimientos actual para responder con precisión."
+        elif detected_lang_code == "ar":
+            not_found_msg = "لا تتوفر لدي معلومات موثقة كافية في قاعدة المعرفة الحالية للإجابة على هذا السؤال بدقة."
+
         return {
             "status": "not_found",
             "intent": "insufficient_info",
-            "answer": "I don't have enough relevant information in the current knowledge base to answer this accurately.",
+            "answer": not_found_msg,
             "proof_documents": [],
             "citations": [],
             "found": False,
+            "language_info": {
+                "detected_language": detected_lang_code,
+                "language_name": detected_lang_name,
+                "confidence": lang_info.get("confidence", 1.0),
+                "is_code_mixed": is_code_mixed,
+            },
+            "session_state": {
+                "session_id": s_id,
+                "current_intent": session["current_intent"],
+                "repeated_intent_count": session["repeated_intent_count"]
+            }
         }
 
     context_str = "\n\n".join([
@@ -620,17 +694,18 @@ Provide concrete actionable advice (e.g. quantitative synergy assays, global pri
         for i, d in enumerate(knowledge_matches)
     ])
 
-    system_prompt = f"""You are AYUTH, an AI Intellectual Property and Regulatory Assistant specializing in Ayurvedic IP, Traditional Knowledge (TKDL), and Patent Regulations (Patents Act 1970, Biological Diversity Act 2002).
+    system_prompt = f"""{lang_instruction}
 
-Answer the user's question directly, clearly, and concisely based on the RETRIEVED CHROMADB STATUTORY CONTEXT below:
+You are AYUTH, an AI Intellectual Property and Regulatory Assistant.
+
+Answer the user's question directly, clearly, and concisely in {detected_lang_name} based on the RETRIEVED CHROMADB STATUTORY CONTEXT below:
 === RETRIEVED STATUTORY CONTEXT ===
 {context_str}
 
 INSTRUCTIONS:
 1. Ground your answer strictly in the provided statutory context and cite relevant Sections, acts, and guidelines.
-2. If the context does not contain enough relevant information to answer the question, state:
-   "I don't have enough relevant information in the current knowledge base to answer this accurately."
-3. Keep the tone authoritative, concise, and professional."""
+2. If the context does not contain enough relevant information, state in {detected_lang_name} that the current knowledge base does not contain sufficient verified information.
+3. Keep the tone authoritative, concise, and professional in {detected_lang_name}."""
 
     llm_messages = [{"role": "system", "content": system_prompt}]
     for h in history[-4:]:
@@ -646,13 +721,22 @@ INSTRUCTIONS:
         top_match = knowledge_matches[0]
         llm_reply = f"{top_match.get('answer')}\n\n**Statutory Citation**: {top_match.get('citation', 'Indian Patents Act, 1970')}"
 
-    is_insufficient = "don't have enough relevant information" in llm_reply.lower() or "not enough information" in llm_reply.lower()
-
     return {
-        "status": "success" if not is_insufficient else "not_found",
+        "status": "success",
         "intent": "statutory_answer",
         "answer": llm_reply,
-        "proof_documents": [] if is_insufficient else knowledge_matches,
-        "citations": [] if is_insufficient else [d.get("citation") for d in knowledge_matches if d.get("citation")],
-        "found": not is_insufficient,
+        "proof_documents": knowledge_matches,
+        "citations": [d.get("citation") for d in knowledge_matches if d.get("citation")],
+        "found": True,
+        "language_info": {
+            "detected_language": detected_lang_code,
+            "language_name": detected_lang_name,
+            "confidence": lang_info.get("confidence", 1.0),
+            "is_code_mixed": is_code_mixed,
+        },
+        "session_state": {
+            "session_id": s_id,
+            "current_intent": session["current_intent"],
+            "repeated_intent_count": session["repeated_intent_count"]
+        }
     }

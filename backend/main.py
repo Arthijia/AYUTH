@@ -37,10 +37,11 @@ class ChatRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = []
     jurisdiction: Optional[str] = "all"
     inventionProfile: Optional[Dict[str, Any]] = None
-    language: Optional[str] = "en"
+    language: Optional[str] = "auto"
     limit: Optional[int] = 4
     apiKey: Optional[str] = None
     documentText: Optional[str] = None
+    sessionId: Optional[str] = None
 
 class DocumentUploadRequest(BaseModel):
     title: str
@@ -102,9 +103,10 @@ async def chat_endpoint(payload: ChatRequest):
             query=query_text or "Invention Analysis Request from Document",
             history=payload.history,
             invention_profile=payload.inventionProfile,
-            language=payload.language or "en",
+            language=payload.language or "auto",
             api_key=payload.apiKey,
             document_text=payload.documentText,
+            session_id=payload.sessionId,
         )
         return response
     except Exception as e:
