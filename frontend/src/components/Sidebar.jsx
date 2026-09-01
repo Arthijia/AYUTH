@@ -85,7 +85,7 @@ export default function Sidebar({ activeTab, onSelectTab, language, profile, mes
 
           <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100 text-[11px]">
             <span className="text-slate-500 flex items-center gap-1">
-              <Database className="w-3 h-3 text-ayurveda-primary" /> ChromaDB:
+              <Database className="w-3 h-3 text-ayurveda-primary" /> Vector DB:
             </span>
             <span className="font-semibold text-emerald-600">Active</span>
           </div>

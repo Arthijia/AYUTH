@@ -37,8 +37,8 @@ export default function SettingsModal({ isOpen, onClose, apiKey, onSaveApiKey, o
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
             <span className="font-bold text-slate-700 block text-[11px] font-mono-code uppercase">Active System Stack:</span>
             <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-600">
-              <div>• <strong>LLM:</strong> Groq (Llama 3.3 70B)</div>
-              <div>• <strong>Vector DB:</strong> ChromaDB</div>
+              <div>• <strong>LLM:</strong> Groq</div>
+              <div>• <strong>Vector DB:</strong> Active (Vector DB)</div>
               <div>• <strong>Database:</strong> PostgreSQL</div>
               <div>• <strong>Storage:</strong> Supabase</div>
             </div>

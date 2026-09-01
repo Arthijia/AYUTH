@@ -186,7 +186,7 @@ export default function ChatTab({ messages, onSendMessage, isLoading, language }
             <h2 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 leading-none">
               AYUTH AI Assistant
               <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
-                ChromaDB RAG
+                Vector DB RAG
               </span>
             </h2>
           </div>

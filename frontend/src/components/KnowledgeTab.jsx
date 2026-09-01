@@ -137,7 +137,7 @@ export default function KnowledgeTab({ language }) {
               {t('kbTitle')}
             </h2>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Indexed Statutory Sections, Case Precedents & ChromaDB Records ({items.length} Sections Active)
+              Indexed Statutory Sections, Case Precedents & Vector DB Records ({items.length} Sections Active)
             </p>
           </div>
 
@@ -175,7 +175,7 @@ export default function KnowledgeTab({ language }) {
       <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80">
         {loading ? (
           <div className="text-center py-8 text-slate-400 text-xs">
-            Loading knowledge base records from ChromaDB...
+            Loading knowledge base records from Vector DB...
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-xs space-y-2">
@@ -242,7 +242,7 @@ export default function KnowledgeTab({ language }) {
             <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-bold text-slate-800 flex items-center gap-2 font-cinzel text-xs">
                 <Upload className="w-3.5 h-3.5 text-ayurveda-primary" />
-                Upload New Statutory Section to ChromaDB
+                Upload New Statutory Section to Vector DB
               </h3>
               <button
                 onClick={() => setIsUploadOpen(false)}
@@ -257,7 +257,7 @@ export default function KnowledgeTab({ language }) {
                 <div className="py-6 text-center space-y-1.5">
                   <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto animate-bounce" />
                   <p className="font-bold text-xs text-emerald-800">
-                    Section Indexed Successfully into ChromaDB!
+                    Section Indexed Successfully into Vector DB!
                   </p>
                 </div>
               ) : (
