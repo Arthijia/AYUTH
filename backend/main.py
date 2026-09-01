@@ -88,9 +88,14 @@ async def health_check():
     all_docs = get_all_knowledge_documents()
     return {
         "status": "ok",
-        "service": "AYUTH Autonomous Legal RAG Engine",
-        "version": "2.1.0",
-        "engine": "Autonomous RAG Knowledge Agent (Direct Statutory Grounding)",
+        "service": "AYUTH RAG Backend",
+        "version": "2.0.0",
+        "models": {
+            "chatProvider": "groq",
+            "chat": settings.GROQ_MODEL or "openai/gpt-oss-120b",
+        },
+        "hasGroqApiKey": bool(settings.GROQ_API_KEY),
+        "engine": "Autonomous RAG Knowledge Agent (Groq LLM + Direct Statutory Grounding)",
         "totalKnowledgeRecords": len(all_docs),
         "totalInventionRecords": len(get_invention_records()),
         "supabaseConfigured": is_supabase_configured(),

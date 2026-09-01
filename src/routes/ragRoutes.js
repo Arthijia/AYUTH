@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { getVectorStoreStats, searchVectorStore, reindexVectorStore } from '../services/vectorStoreService.js';
 import { executeRagPipeline } from '../services/ragService.js';
 import { classifyAyurvedicInvention } from '../services/classifierService.js';
+import { getAiProviderInfo } from '../services/aiService.js';
 
 export const ragRouter = express.Router();
 
@@ -13,19 +14,22 @@ export const ragRouter = express.Router();
 ragRouter.get('/health', async (req, res) => {
   try {
     const vectorStats = await getVectorStoreStats();
+    const aiInfo = getAiProviderInfo();
+
     res.json({
       status: 'ok',
       service: 'AYUTH RAG Backend',
       version: '2.0.0',
       timestamp: new Date().toISOString(),
       models: {
-        chat: config.chatModel,
-        embedding: config.embeddingModel,
+        chatProvider: 'groq',
+        chat: config.groqModel || 'openai/gpt-oss-120b',
       },
-      hasServerApiKey: Boolean(config.geminiApiKey),
+      hasGroqApiKey: Boolean(config.groqApiKey),
       vectorStore: vectorStats,
     });
   } catch (error) {
+    console.error('[Health Check Error]', error);
     res.status(500).json({
       status: 'error',
       message: error.message,
@@ -41,6 +45,7 @@ async function handleRagQuery(req, res) {
   try {
     const {
       question,
+      message,
       jurisdiction = 'india',
       inventionProfile = {},
       apiKey = null,
@@ -48,12 +53,13 @@ async function handleRagQuery(req, res) {
       language = 'en',
     } = req.body || {};
 
-    if (!question || !String(question).trim()) {
-      return res.status(400).json({ error: 'Question is required.' });
+    const userQuery = String(question || message || '').trim();
+    if (!userQuery) {
+      return res.status(400).json({ error: 'Question or message is required.' });
     }
 
     const ragResult = await executeRagPipeline({
-      question,
+      question: userQuery,
       jurisdiction,
       inventionProfile,
       apiKey,
@@ -63,12 +69,19 @@ async function handleRagQuery(req, res) {
 
     res.json(ragResult);
   } catch (error) {
-    console.error('[RAG Error]', error);
-    const isApiKeyError = error.message?.toLowerCase().includes('api key');
-    const statusCode = isApiKeyError ? 401 : 500;
+    console.error('[RAG Chat Error]', error);
+    const msg = error.message || '';
+    let statusCode = 500;
+
+    if (msg.includes('No Groq API key') || msg.includes('Invalid Groq API key') || msg.includes('API key')) {
+      statusCode = 401;
+    } else if (msg.includes('rate limit') || msg.includes('Rate limit')) {
+      statusCode = 429;
+    }
 
     res.status(statusCode).json({
-      error: error.message || 'Internal RAG pipeline error occurred.',
+      error: error.message || 'Internal RAG pipeline error occurred with Groq provider.',
+      chatProvider: 'groq',
     });
   }
 }

@@ -349,14 +349,13 @@ async function getAIResponse(userMessage) {
 
   try {
     // Try RAG Backend API first
-    const response = await callGeminiAPI(userMessage);
+    const response = await callChatAPI(userMessage);
     loadingDiv.remove();
     addMessageToChat(response, "assistant");
   } catch (error) {
-    // If live API fails or server unreachable and no explicit fatal error, fallback gracefully
-    console.warn("Backend/Gemini call issue, falling back:", error.message);
+    console.warn("Backend/Groq call issue:", error.message);
     loadingDiv.remove();
-    if (error.message.includes("Invalid API key")) {
+    if (error.message.includes("Invalid API key") || error.message.includes("API key")) {
       addMessageToChat(
         t("errorMessage") + " (" + error.message + ")",
         "assistant"
@@ -373,7 +372,6 @@ async function getAIResponse(userMessage) {
 function retrieveRelevantKnowledge(userMessage, limit = 3) {
   const query = userMessage.toLowerCase();
   const terms = query.split(/\s+/).filter(Boolean);
-
   const scored = knowledgeBase
     .map((item) => {
       const question = item.question.toLowerCase();
@@ -403,7 +401,7 @@ function retrieveRelevantKnowledge(userMessage, limit = 3) {
   return scored;
 }
 
-async function callGeminiAPI(userMessage) {
+async function callChatAPI(userMessage) {
   const apiUrl = window.location.protocol === "file:"
     ? "http://localhost:8000/api/chat"
     : "/api/chat";
@@ -425,7 +423,7 @@ async function callGeminiAPI(userMessage) {
     const message = errorData.error || `Backend API error: ${response.status}`;
 
     if (response.status === 401 || message.toLowerCase().includes("api key")) {
-      throw new Error("Invalid API key. Check your Gemini API key in settings or server .env.");
+      throw new Error("Invalid or missing Groq API key. Check your GROQ_API_KEY in backend/.env.");
     }
 
     throw new Error(message);
